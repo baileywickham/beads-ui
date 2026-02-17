@@ -38,15 +38,22 @@ codesign --force --deep --sign - "${APP_BUNDLE}"
 
 echo "==> App bundle created at ${APP_BUNDLE}"
 
-# Create DMG
+# Create DMG with Applications symlink for drag-to-install
 DMG_NAME="${APP_NAME}-${VERSION}-macOS.dmg"
 DMG_PATH="${BUILD_DIR}/${DMG_NAME}"
+DMG_TEMP="${BUILD_DIR}/${APP_NAME}-temp.dmg"
 
 echo "==> Creating DMG..."
-hdiutil create -volname "${APP_NAME}" \
-    -srcfolder "${APP_BUNDLE}" \
-    -ov -format UDZO \
-    "${DMG_PATH}"
+rm -f "${DMG_TEMP}" "${DMG_PATH}"
+
+# Create a writable DMG, mount it, copy app + symlink, then convert to compressed
+hdiutil create -size 50m -fs HFS+ -volname "${APP_NAME}" "${DMG_TEMP}"
+MOUNT_DIR=$(hdiutil attach "${DMG_TEMP}" -nobrowse | tail -1 | awk '{print $3}')
+cp -R "${APP_BUNDLE}" "${MOUNT_DIR}/"
+ln -s /Applications "${MOUNT_DIR}/Applications"
+hdiutil detach "${MOUNT_DIR}"
+hdiutil convert "${DMG_TEMP}" -format UDZO -o "${DMG_PATH}"
+rm -f "${DMG_TEMP}"
 
 echo "==> DMG created at ${DMG_PATH}"
 
