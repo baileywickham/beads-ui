@@ -22,6 +22,10 @@
     <true/>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
+    <key>SUFeedURL</key>
+    <string>https://raw.githubusercontent.com/baileywickham/beads-ui/main/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>i8Jw7bLedMNx2oHKSUqeuzcTY9NRoOeVTepLdf4tZys=</string>
     <key>NSSupportsAutomaticTermination</key>
     <true/>
     <key>NSSupportsSuddenTermination</key>

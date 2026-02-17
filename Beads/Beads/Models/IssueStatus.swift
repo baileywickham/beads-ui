@@ -21,7 +21,7 @@ enum IssueStatus: String, CaseIterable, Codable, Hashable {
 
     var color: Color {
         switch self {
-        case .open: .green
+        case .open: Color(.sRGB, red: 0.2, green: 0.78, blue: 0.55)
         case .inProgress: .blue
         case .blocked: .red
         case .closed: .secondary
