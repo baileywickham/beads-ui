@@ -17,7 +17,7 @@ let package = Package(
                 .product(name: "GRDB", package: "GRDB.swift"),
             ],
             path: "Beads",
-            exclude: ["Assets.xcassets"]
+            exclude: ["Assets.xcassets", "Info.plist"]
         ),
     ]
 )
