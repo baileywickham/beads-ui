@@ -33,7 +33,13 @@ if [ -d "Beads/Beads/Assets.xcassets" ]; then
     cp -r Beads/Beads/Assets.xcassets "${APP_BUNDLE}/Contents/Resources/" 2>/dev/null || true
 fi
 
-# Ad-hoc sign (allows running without developer certificate)
+# Embed Sparkle.framework
+SPARKLE_FRAMEWORK="Beads/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
+mkdir -p "${APP_BUNDLE}/Contents/Frameworks"
+cp -R "${SPARKLE_FRAMEWORK}" "${APP_BUNDLE}/Contents/Frameworks/"
+
+# Ad-hoc sign (framework first, then app)
+codesign --force --sign - "${APP_BUNDLE}/Contents/Frameworks/Sparkle.framework"
 codesign --force --deep --sign - "${APP_BUNDLE}"
 
 echo "==> App bundle created at ${APP_BUNDLE}"
@@ -47,11 +53,12 @@ echo "==> Creating DMG..."
 rm -f "${DMG_TEMP}" "${DMG_PATH}"
 
 # Create a writable DMG, mount it, copy app + symlink, then convert to compressed
+hdiutil detach "/Volumes/${APP_NAME}" 2>/dev/null || true
 hdiutil create -size 50m -fs HFS+ -volname "${APP_NAME}" "${DMG_TEMP}"
-MOUNT_DIR=$(hdiutil attach "${DMG_TEMP}" -nobrowse | tail -1 | awk '{print $3}')
-cp -R "${APP_BUNDLE}" "${MOUNT_DIR}/"
-ln -s /Applications "${MOUNT_DIR}/Applications"
-hdiutil detach "${MOUNT_DIR}"
+hdiutil attach "${DMG_TEMP}" -nobrowse -mountpoint "/Volumes/${APP_NAME}"
+cp -R "${APP_BUNDLE}" "/Volumes/${APP_NAME}/"
+ln -s /Applications "/Volumes/${APP_NAME}/Applications"
+hdiutil detach "/Volumes/${APP_NAME}"
 hdiutil convert "${DMG_TEMP}" -format UDZO -o "${DMG_PATH}"
 rm -f "${DMG_TEMP}"
 
