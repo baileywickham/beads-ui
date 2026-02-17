@@ -87,6 +87,13 @@ struct SidebarView: View {
                     }
                 }
             }
+            // Version
+            if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
+                Text("v\(version)")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .padding(.bottom, 8)
+            }
         }
         .frame(minWidth: 180)
     }
