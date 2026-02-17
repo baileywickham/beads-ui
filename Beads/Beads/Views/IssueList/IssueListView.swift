@@ -52,6 +52,8 @@ struct IssueListView: View {
                         Text("This project has no issues")
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(.background)
             }
         }
         .frame(minWidth: 280)
