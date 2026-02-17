@@ -38,6 +38,9 @@ SPARKLE_FRAMEWORK="Beads/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/ma
 mkdir -p "${APP_BUNDLE}/Contents/Frameworks"
 cp -R "${SPARKLE_FRAMEWORK}" "${APP_BUNDLE}/Contents/Frameworks/"
 
+# Fix rpath so the binary finds Sparkle.framework in Contents/Frameworks/
+install_name_tool -add_rpath @executable_path/../Frameworks "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
+
 # Ad-hoc sign (framework first, then app)
 codesign --force --sign - "${APP_BUNDLE}/Contents/Frameworks/Sparkle.framework"
 codesign --force --deep --sign - "${APP_BUNDLE}"
