@@ -4,5 +4,13 @@
         <title>Beads</title>
         <description>Beads app updates</description>
         <language>en</language>
+        <item>
+            <title>Version 0.2.0</title>
+            <sparkle:version>0.2.0</sparkle:version>
+            <pubDate>Tue, 17 Feb 2026 23:04:33 +0000</pubDate>
+            <enclosure url="https://github.com/baileywickham/beads-ui/releases/download/v0.2.0/Beads-0.2.0-macOS.zip" length="1985972" type="application/octet-stream" sparkle:edSignature="nRDZiRTInRj4ml0GNHrqbLVFsCWjUWvqXB6WGI/O2ZnVZilAmrS61wfdX1DePVM2TS8ad+UXc0gj0DPMpQVxDQ==" />
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+        </item>
+
     </channel>
 </rss>
