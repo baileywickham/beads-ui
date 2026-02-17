@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-@Observable
+@MainActor @Observable
 final class ProjectState {
     let project: Project
     let cliExecutor: CLIExecutor
@@ -148,11 +148,9 @@ final class ProjectState {
             do {
                 try await cliExecutor.updateStatus(id: id, status: status, dbPath: project.dbPath)
             } catch {
-                await MainActor.run {
-                    self.issues = oldIssues
-                    self.selectedIssue = oldDetail
-                    self.errorMessage = error.localizedDescription
-                }
+                self.issues = oldIssues
+                self.selectedIssue = oldDetail
+                self.errorMessage = error.localizedDescription
             }
         }
     }
@@ -168,10 +166,8 @@ final class ProjectState {
             do {
                 try await cliExecutor.updatePriority(id: id, priority: priority, dbPath: project.dbPath)
             } catch {
-                await MainActor.run {
-                    self.issues = oldIssues
-                    self.errorMessage = error.localizedDescription
-                }
+                self.issues = oldIssues
+                self.errorMessage = error.localizedDescription
             }
         }
     }
@@ -187,10 +183,8 @@ final class ProjectState {
             do {
                 try await cliExecutor.updateTitle(id: id, title: title, dbPath: project.dbPath)
             } catch {
-                await MainActor.run {
-                    self.issues = oldIssues
-                    self.errorMessage = error.localizedDescription
-                }
+                self.issues = oldIssues
+                self.errorMessage = error.localizedDescription
             }
         }
     }
@@ -209,9 +203,7 @@ final class ProjectState {
                     try await cliExecutor.updateIssue(id: id, field: field, value: value, dbPath: project.dbPath)
                 }
             } catch {
-                await MainActor.run {
-                    self.errorMessage = error.localizedDescription
-                }
+                self.errorMessage = error.localizedDescription
             }
         }
     }
@@ -226,9 +218,7 @@ final class ProjectState {
                     title: title, type: type, priority: priority,
                     description: description, labels: labels, dbPath: project.dbPath)
             } catch {
-                await MainActor.run {
-                    self.errorMessage = error.localizedDescription
-                }
+                self.errorMessage = error.localizedDescription
             }
         }
     }
@@ -240,9 +230,7 @@ final class ProjectState {
             do {
                 try await GhosttyLauncher.launchClaude(issue: issue, projectPath: project.path, comment: comment)
             } catch {
-                await MainActor.run {
-                    self.errorMessage = "Failed to launch Claude: \(error.localizedDescription)"
-                }
+                self.errorMessage = "Failed to launch Claude: \(error.localizedDescription)"
             }
         }
     }
@@ -252,9 +240,7 @@ final class ProjectState {
             do {
                 try await cliExecutor.addComment(issueId: issueId, text: text, dbPath: project.dbPath)
             } catch {
-                await MainActor.run {
-                    self.errorMessage = error.localizedDescription
-                }
+                self.errorMessage = error.localizedDescription
             }
         }
     }

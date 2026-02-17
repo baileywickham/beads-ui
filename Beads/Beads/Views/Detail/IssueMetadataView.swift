@@ -71,8 +71,7 @@ struct IssueMetadataView: View {
                                 .font(.caption)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(.quaternary)
-                                .clipShape(Capsule())
+                                .glassEffect(.regular, in: .capsule)
                         }
                     }
                 }

@@ -11,39 +11,35 @@ struct IssueDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 20) {
                 // Header
                 header
 
-                Divider()
-
                 // Metadata
-                IssueMetadataView(
-                    issue: issue,
-                    onStatusChange: { status in
-                        state.updateStatus(issue.id, to: status)
-                    },
-                    onPriorityChange: { priority in
-                        state.updatePriority(issue.id, to: priority)
+                GroupBox {
+                    IssueMetadataView(
+                        issue: issue,
+                        onStatusChange: { status in
+                            state.updateStatus(issue.id, to: status)
+                        },
+                        onPriorityChange: { priority in
+                            state.updatePriority(issue.id, to: priority)
+                        }
+                    )
+                    .padding(4)
+                }
+
+                // Description
+                IssueMarkdownSection(
+                    title: "Description",
+                    content: issue.description,
+                    onSave: { text in
+                        state.updateField(issue.id, field: "description", value: text)
                     }
                 )
 
-                Divider()
-
-                // Description
-                if !issue.description.isEmpty || true {
-                    IssueMarkdownSection(
-                        title: "Description",
-                        content: issue.description,
-                        onSave: { text in
-                            state.updateField(issue.id, field: "description", value: text)
-                        }
-                    )
-                }
-
                 // Design
                 if !issue.design.isEmpty {
-                    Divider()
                     IssueMarkdownSection(
                         title: "Design",
                         content: issue.design,
@@ -55,7 +51,6 @@ struct IssueDetailView: View {
 
                 // Acceptance Criteria
                 if !issue.acceptanceCriteria.isEmpty {
-                    Divider()
                     IssueMarkdownSection(
                         title: "Acceptance Criteria",
                         content: issue.acceptanceCriteria,
@@ -67,7 +62,6 @@ struct IssueDetailView: View {
 
                 // Notes
                 if !issue.notes.isEmpty {
-                    Divider()
                     IssueMarkdownSection(
                         title: "Notes",
                         content: issue.notes,
@@ -79,18 +73,19 @@ struct IssueDetailView: View {
 
                 // Dependencies
                 if !issue.dependencies.isEmpty {
-                    Divider()
-                    IssueDependenciesView(
-                        dependencies: issue.dependencies,
-                        onSelect: { id in
-                            state.loadIssueDetail(id: id)
-                            state.selectedIssueId = id
-                        }
-                    )
+                    GroupBox {
+                        IssueDependenciesView(
+                            dependencies: issue.dependencies,
+                            onSelect: { id in
+                                state.loadIssueDetail(id: id)
+                                state.selectedIssueId = id
+                            }
+                        )
+                        .padding(4)
+                    }
                 }
 
                 // Comments
-                Divider()
                 IssueCommentsView(
                     comments: issue.comments,
                     onAdd: { text in
@@ -101,38 +96,16 @@ struct IssueDetailView: View {
             .padding(20)
         }
         .frame(minWidth: 400)
-    }
-
-    @ViewBuilder
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(issue.id)
-                    .font(.callout)
-                    .monospaced()
-                    .foregroundStyle(.secondary)
-
-                if issue.pinned {
-                    Image(systemName: "pin.fill")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                }
-
-                Spacer()
-
-                // Toolbar actions
+        .toolbar {
+            ToolbarItemGroup(placement: .automatic) {
                 if issue.status == .closed {
                     Button("Reopen") {
                         state.updateStatus(issue.id, to: .open)
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
                 } else {
                     Button("Close") {
                         state.closeAndAdvance(issue.id)
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
                 }
 
                 Menu {
@@ -150,9 +123,6 @@ struct IssueDetailView: View {
                 } label: {
                     Label("Claude", systemImage: "terminal")
                 }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                .controlSize(.small)
                 .popover(isPresented: $showClaudeComment) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Comment for Claude")
@@ -160,7 +130,10 @@ struct IssueDetailView: View {
                         TextEditor(text: $claudeComment)
                             .font(.body)
                             .frame(width: 350, height: 120)
-                            .border(Color.secondary.opacity(0.3))
+                            .scrollContentBackground(.hidden)
+                            .padding(8)
+                            .background(.quaternary.opacity(0.5))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
                         HStack {
                             Spacer()
                             Button("Cancel") { showClaudeComment = false }
@@ -173,6 +146,24 @@ struct IssueDetailView: View {
                         }
                     }
                     .padding()
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Text(issue.id)
+                    .font(.callout)
+                    .monospaced()
+                    .foregroundStyle(.secondary)
+
+                if issue.pinned {
+                    Image(systemName: "pin.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
                 }
             }
 

@@ -8,7 +8,9 @@ struct IssueListView: View {
             get: { state.selectedIssueId },
             set: { id in
                 if let id, let issue = state.filteredIssues.first(where: { $0.id == id }) {
-                    state.selectIssue(issue)
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        state.selectIssue(issue)
+                    }
                 }
             }
         )) {
@@ -31,7 +33,8 @@ struct IssueListView: View {
                 }
             }
         }
-        .listStyle(.inset)
+        .listStyle(.inset(alternatesRowBackgrounds: true))
+        .animation(.default, value: state.filteredIssues.map(\.id))
         .searchable(text: Binding(
             get: { state.searchText },
             set: { state.searchText = $0 }

@@ -10,8 +10,7 @@ struct PriorityIndicator: View {
             .monospacedDigit()
             .padding(.horizontal, 5)
             .padding(.vertical, 1)
-            .background(priority.color.opacity(0.15))
             .foregroundStyle(priority.color)
-            .clipShape(RoundedRectangle(cornerRadius: 3))
+            .glassEffect(.regular.tint(priority.color.opacity(0.3)), in: RoundedRectangle(cornerRadius: 4))
     }
 }

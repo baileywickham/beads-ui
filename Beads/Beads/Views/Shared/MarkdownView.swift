@@ -8,7 +8,7 @@ struct MarkdownView: View {
             Text("No content")
                 .foregroundStyle(.tertiary)
                 .italic()
-        } else if let attributed = try? AttributedString(markdown: content, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
+        } else if let attributed = try? AttributedString(markdown: content, options: .init(interpretedSyntax: .full)) {
             Text(attributed)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)

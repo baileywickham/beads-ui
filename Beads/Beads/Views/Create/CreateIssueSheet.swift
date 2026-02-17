@@ -11,64 +11,40 @@ struct CreateIssueSheet: View {
     @State private var labelText = ""
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack {
-                Text("New Issue")
-                    .font(.headline)
-                Spacer()
-                Button("Cancel") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-            }
-            .padding()
-
-            Divider()
-
-            // Form
-            Form {
+        Form {
+            Section {
                 TextField("Title", text: $title)
-                    .textFieldStyle(.roundedBorder)
 
-                HStack {
-                    Picker("Type", selection: $issueType) {
-                        ForEach(IssueType.allCases, id: \.self) { type in
-                            Label(type.label, systemImage: type.icon).tag(type)
-                        }
+                Picker("Type", selection: $issueType) {
+                    ForEach(IssueType.allCases, id: \.self) { type in
+                        Label(type.label, systemImage: type.icon).tag(type)
                     }
-                    .frame(maxWidth: 200)
-
-                    Picker("Priority", selection: $priority) {
-                        ForEach(IssuePriority.allCases, id: \.self) { p in
-                            Text("\(p.label) — \(p.name)").tag(p)
-                        }
-                    }
-                    .frame(maxWidth: 200)
                 }
 
-                VStack(alignment: .leading) {
-                    Text("Description")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    TextEditor(text: $description)
-                        .font(.system(.body, design: .monospaced))
-                        .frame(minHeight: 100)
-                        .scrollContentBackground(.hidden)
-                        .padding(4)
-                        .background(.quaternary.opacity(0.3))
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                Picker("Priority", selection: $priority) {
+                    ForEach(IssuePriority.allCases, id: \.self) { p in
+                        Text("\(p.label) — \(p.name)").tag(p)
+                    }
                 }
-
-                TextField("Labels (comma separated)", text: $labelText)
-                    .textFieldStyle(.roundedBorder)
             }
-            .formStyle(.grouped)
-            .padding(.horizontal)
 
-            Divider()
+            Section("Description") {
+                TextEditor(text: $description)
+                    .font(.system(.body, design: .monospaced))
+                    .frame(minHeight: 120)
+            }
 
-            // Footer
-            HStack {
-                Spacer()
+            Section {
+                TextField("Labels (comma separated)", text: $labelText)
+            }
+        }
+        .formStyle(.grouped)
+        .navigationTitle("New Issue")
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") { dismiss() }
+            }
+            ToolbarItem(placement: .confirmationAction) {
                 Button("Create") {
                     let labels = labelText.split(separator: ",")
                         .map { $0.trimmingCharacters(in: .whitespaces) }
@@ -80,11 +56,9 @@ struct CreateIssueSheet: View {
                     )
                     dismiss()
                 }
-                .keyboardShortcut(.defaultAction)
                 .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
             }
-            .padding()
         }
-        .frame(width: 560, height: 480)
+        .frame(width: 520, height: 460)
     }
 }

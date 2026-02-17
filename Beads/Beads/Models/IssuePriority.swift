@@ -15,7 +15,7 @@ enum IssuePriority: Int, CaseIterable, Codable, Hashable {
         switch self {
         case .p0: .red
         case .p1: .orange
-        case .p2: .yellow
+        case .p2: Color(.sRGB, red: 0.8, green: 0.6, blue: 0.0)
         case .p3: .blue
         case .p4: .secondary
         }

@@ -24,6 +24,8 @@ struct ContentView: View {
             } detail: {
                 if let state = appState.currentProjectState, let issue = state.selectedIssue {
                     IssueDetailView(issue: issue, state: state)
+                        .id(issue.id)
+                        .transition(.opacity)
                 } else {
                     ContentUnavailableView(
                         "Select an Issue",
@@ -32,6 +34,7 @@ struct ContentView: View {
                     )
                 }
             }
+            .animation(.easeInOut(duration: 0.2), value: appState.currentProjectState?.selectedIssueId)
             .navigationTitle(appState.selectedProject?.name ?? "Beads")
             .toolbar {
                 ToolbarItemGroup(placement: .primaryAction) {
@@ -77,6 +80,7 @@ struct ContentView: View {
                 Color.black.opacity(0.3)
                     .ignoresSafeArea()
                     .onTapGesture { paletteState.toggle() }
+                    .transition(.opacity)
 
                 VStack {
                     CommandPaletteView(
@@ -86,10 +90,12 @@ struct ContentView: View {
                         }
                     )
                     .padding(.top, 100)
+                    .transition(.move(edge: .top).combined(with: .opacity))
                     Spacer()
                 }
             }
         }
+        .animation(.easeOut(duration: 0.2), value: paletteState.isVisible)
         .onAppear {
             appState.loadProjects()
         }

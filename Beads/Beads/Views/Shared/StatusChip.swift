@@ -13,8 +13,7 @@ struct StatusChip: View {
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 2)
-        .background(status.color.opacity(0.15))
         .foregroundStyle(status.color)
-        .clipShape(Capsule())
+        .glassEffect(.regular.tint(status.color.opacity(0.3)), in: .capsule)
     }
 }

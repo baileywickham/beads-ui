@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-@Observable
+@MainActor @Observable
 final class AppState {
     var projects: [Project] = []
     var selectedProject: Project?

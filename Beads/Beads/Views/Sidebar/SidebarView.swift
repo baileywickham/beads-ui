@@ -18,7 +18,7 @@ struct SidebarView: View {
                     ForEach(appState.projects) { project in
                         Button {
                             appState.selectProject(project)
-                            selection = .all
+                            selection = .status(.open)
                         } label: {
                             HStack {
                                 Text(project.name)
@@ -62,45 +62,28 @@ struct SidebarView: View {
             if let state = appState.currentProjectState {
                 List(selection: $selection) {
                     Section("Filter") {
-                        Label {
-                            HStack {
-                                Text("All Issues")
-                                Spacer()
-                                Text("\(state.statusCounts.values.reduce(0, +))")
-                                    .foregroundStyle(.secondary)
-                                    .font(.caption)
-                                    .monospacedDigit()
-                            }
-                        } icon: {
-                            Image(systemName: "tray.full")
-                        }
-                        .tag(StatusFilter.all)
+                        Label("All Issues", systemImage: "tray.full")
+                            .badge(state.statusCounts.values.reduce(0, +))
+                            .tag(StatusFilter.all)
 
                         ForEach(IssueStatus.sidebarStatuses, id: \.self) { status in
-                            Label {
-                                HStack {
-                                    Text(status.label)
-                                    Spacer()
-                                    Text("\(state.statusCounts[status] ?? 0)")
-                                        .foregroundStyle(.secondary)
-                                        .font(.caption)
-                                        .monospacedDigit()
-                                }
-                            } icon: {
-                                Image(systemName: status.icon)
-                                    .foregroundStyle(status.color)
-                            }
-                            .tag(StatusFilter.status(status))
+                            Label(status.label, systemImage: status.icon)
+                                .foregroundStyle(status.color)
+                                .badge(state.statusCounts[status] ?? 0)
+                                .tag(StatusFilter.status(status))
                         }
                     }
                 }
                 .listStyle(.sidebar)
+                .animation(.default, value: state.statusCounts)
                 .onChange(of: selection) { _, newValue in
-                    switch newValue {
-                    case .all:
-                        state.statusFilter = nil
-                    case .status(let status):
-                        state.statusFilter = status
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        switch newValue {
+                        case .all:
+                            state.statusFilter = nil
+                        case .status(let status):
+                            state.statusFilter = status
+                        }
                     }
                 }
             }

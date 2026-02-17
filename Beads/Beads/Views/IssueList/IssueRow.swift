@@ -18,7 +18,6 @@ struct IssueRow: View {
 
             Text(issue.title)
                 .font(.body)
-                .fontWeight(isSelected ? .semibold : .regular)
                 .lineLimit(2)
 
             HStack(spacing: 8) {

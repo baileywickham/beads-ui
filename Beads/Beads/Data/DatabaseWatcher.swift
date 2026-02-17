@@ -1,13 +1,13 @@
 import Foundation
 
-final class DatabaseWatcher {
+final class DatabaseWatcher: @unchecked Sendable {
     private var source: DispatchSourceFileSystemObject?
     private var dirFD: Int32 = -1
     private let debounceInterval: TimeInterval = 0.15
     private var debounceWorkItem: DispatchWorkItem?
-    private let onChange: () -> Void
+    private let onChange: @MainActor () -> Void
 
-    init(directory: String, onChange: @escaping () -> Void) {
+    init(directory: String, onChange: @escaping @MainActor () -> Void) {
         self.onChange = onChange
         startWatching(directory: directory)
     }
@@ -38,9 +38,10 @@ final class DatabaseWatcher {
 
     private func scheduleDebounce() {
         debounceWorkItem?.cancel()
-        let work = DispatchWorkItem { [weak self] in
+        let onChange = self.onChange
+        let work = DispatchWorkItem {
             DispatchQueue.main.async {
-                self?.onChange()
+                onChange()
             }
         }
         debounceWorkItem = work

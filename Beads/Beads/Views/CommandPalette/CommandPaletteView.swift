@@ -33,8 +33,7 @@ struct CommandPaletteView: View {
                         .font(.caption)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(.quaternary)
-                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 3))
                 }
                 .buttonStyle(.plain)
             }
@@ -72,9 +71,8 @@ struct CommandPaletteView: View {
                 .frame(maxHeight: 300)
             }
         }
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.2), radius: 20, y: 10)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+        .shadow(color: .black.opacity(0.15), radius: 30, y: 10)
         .frame(width: 600)
         .onKeyPress(.upArrow) {
             paletteState.moveUp()
