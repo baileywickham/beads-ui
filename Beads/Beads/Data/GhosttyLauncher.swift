@@ -20,7 +20,7 @@ enum GhosttyLauncher {
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/Applications/Ghostty.app/Contents/MacOS/ghostty")
-        process.arguments = ["-e", "/bin/sh", "-c", script]
+        process.arguments = ["-e", "/bin/zsh", "-li", "-c", script]
 
         try process.run()
     }

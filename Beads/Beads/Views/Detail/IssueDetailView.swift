@@ -144,7 +144,7 @@ struct IssueDetailView: View {
                                 showClaudeComment = false
                             }
                             .buttonStyle(.borderedProminent)
-                            .keyboardShortcut(.defaultAction)
+                            .keyboardShortcut(.return, modifiers: .command)
                         }
                     }
                     .padding()
