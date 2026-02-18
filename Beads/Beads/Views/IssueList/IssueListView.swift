@@ -2,6 +2,7 @@ import SwiftUI
 
 struct IssueListView: View {
     @Bindable var state: ProjectState
+    @FocusState private var isFocused: Bool
 
     var body: some View {
         List(selection: Binding(
@@ -56,6 +57,22 @@ struct IssueListView: View {
                 .background(.background)
             }
         }
+        .focusable()
+        .focused($isFocused)
+        .onKeyPress(characters: CharacterSet(charactersIn: "jk")) { press in
+            guard isFocused else { return .ignored }
+            switch press.characters {
+            case "j":
+                state.selectNextIssue()
+                return .handled
+            case "k":
+                state.selectPreviousIssue()
+                return .handled
+            default:
+                return .ignored
+            }
+        }
+        .onAppear { isFocused = true }
         .frame(minWidth: 280)
     }
 }

@@ -14,11 +14,13 @@ enum GhosttyLauncher {
             prompt += "\n\nAdditional instructions:\n\(comment)"
         }
 
-        let script = "cd \"$0\" && unset CLAUDECODE && claude --dangerously-skip-permissions \"$1\""
+        let escapedPath = projectPath.replacingOccurrences(of: "'", with: "'\\''")
+        let escapedPrompt = prompt.replacingOccurrences(of: "'", with: "'\\''")
+        let script = "cd '\(escapedPath)' && unset CLAUDECODE && claude --dangerously-skip-permissions '\(escapedPrompt)'"
 
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        process.arguments = ["-na", "Ghostty", "--args", "-e", "sh", "-c", script, projectPath, prompt]
+        process.executableURL = URL(fileURLWithPath: "/Applications/Ghostty.app/Contents/MacOS/ghostty")
+        process.arguments = ["-e", "/bin/sh", "-c", script]
 
         try process.run()
     }

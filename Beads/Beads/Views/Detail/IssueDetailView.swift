@@ -123,29 +123,32 @@ struct IssueDetailView: View {
                 } label: {
                     Label("Claude", systemImage: "terminal")
                 }
-                .popover(isPresented: $showClaudeComment) {
-                    VStack(alignment: .leading, spacing: 8) {
+                .sheet(isPresented: $showClaudeComment) {
+                    VStack(alignment: .leading, spacing: 12) {
                         Text("Comment for Claude")
                             .font(.headline)
                         TextEditor(text: $claudeComment)
                             .font(.body)
-                            .frame(width: 350, height: 120)
                             .scrollContentBackground(.hidden)
                             .padding(8)
                             .background(.quaternary.opacity(0.5))
                             .clipShape(RoundedRectangle(cornerRadius: 6))
                         HStack {
                             Spacer()
-                            Button("Cancel") { showClaudeComment = false }
+                            Button("Cancel") {
+                                showClaudeComment = false
+                            }
+                            .keyboardShortcut(.cancelAction)
                             Button("Launch") {
                                 state.launchClaude(issue.id, comment: claudeComment)
                                 showClaudeComment = false
                             }
                             .buttonStyle(.borderedProminent)
-                            .keyboardShortcut(.return, modifiers: .command)
+                            .keyboardShortcut(.defaultAction)
                         }
                     }
                     .padding()
+                    .frame(minWidth: 400, minHeight: 200)
                 }
             }
         }

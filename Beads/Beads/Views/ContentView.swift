@@ -104,19 +104,6 @@ struct ContentView: View {
                 paletteState.configure(dbPath: project.dbPath)
             }
         }
-        .onKeyPress(characters: CharacterSet(charactersIn: "jk")) { press in
-            if paletteState.isVisible { return .ignored }
-            switch press.characters {
-            case "j":
-                appState.currentProjectState?.selectNextIssue()
-                return .handled
-            case "k":
-                appState.currentProjectState?.selectPreviousIssue()
-                return .handled
-            default:
-                return .ignored
-            }
-        }
         .onReceive(NotificationCenter.default.publisher(for: .toggleCommandPalette)) { _ in
             paletteState.toggle()
         }
@@ -131,6 +118,5 @@ struct ContentView: View {
                 state.launchClaude(id)
             }
         }
-        .focusable()
     }
 }
