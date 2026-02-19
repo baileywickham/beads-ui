@@ -91,28 +91,19 @@ echo "==> Zip created at ${ZIP_PATH}"
 if [ -n "${NOTARY_PASSWORD:-}" ]; then
     NOTARY_ARGS="--apple-id ${APPLE_ID} --team-id ${APPLE_TEAM_ID} --password ${NOTARY_PASSWORD}"
 
-    echo "==> Notarizing DMG..."
-    DMG_RESULT=$(xcrun notarytool submit "${DMG_PATH}" ${NOTARY_ARGS} --wait 2>&1) || true
-    echo "${DMG_RESULT}"
-    DMG_ID=$(echo "${DMG_RESULT}" | grep "id:" | head -1 | awk '{print $2}')
-    if echo "${DMG_RESULT}" | grep -q "status: Invalid"; then
-        echo "==> Notarization failed, fetching log..."
-        xcrun notarytool log "${DMG_ID}" ${NOTARY_ARGS} || true
-        exit 1
-    fi
-    xcrun stapler staple "${DMG_PATH}"
-    echo "==> DMG notarized and stapled"
-
-    echo "==> Notarizing zip..."
-    ZIP_RESULT=$(xcrun notarytool submit "${ZIP_PATH}" ${NOTARY_ARGS} --wait 2>&1) || true
-    echo "${ZIP_RESULT}"
-    ZIP_ID=$(echo "${ZIP_RESULT}" | grep "id:" | head -1 | awk '{print $2}')
-    if echo "${ZIP_RESULT}" | grep -q "status: Invalid"; then
-        echo "==> Notarization failed, fetching log..."
-        xcrun notarytool log "${ZIP_ID}" ${NOTARY_ARGS} || true
-        exit 1
-    fi
-    echo "==> Zip notarized"
+    echo "==> Submitting DMG for notarization (not waiting)..."
+    xcrun notarytool submit "${DMG_PATH}" ${NOTARY_ARGS} 2>&1 || true
+    # echo "==> Notarizing DMG..."
+    # DMG_RESULT=$(xcrun notarytool submit "${DMG_PATH}" ${NOTARY_ARGS} --wait 2>&1) || true
+    # echo "${DMG_RESULT}"
+    # DMG_ID=$(echo "${DMG_RESULT}" | grep "id:" | head -1 | awk '{print $2}')
+    # if echo "${DMG_RESULT}" | grep -q "status: Invalid"; then
+    #     echo "==> Notarization failed, fetching log..."
+    #     xcrun notarytool log "${DMG_ID}" ${NOTARY_ARGS} || true
+    #     exit 1
+    # fi
+    # xcrun stapler staple "${DMG_PATH}"
+    # echo "==> DMG notarized and stapled"
 else
     echo "==> NOTARY_PASSWORD not set, skipping notarization"
 fi

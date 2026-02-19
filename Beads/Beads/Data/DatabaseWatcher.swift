@@ -1,8 +1,8 @@
 import Foundation
 
 final class DatabaseWatcher: @unchecked Sendable {
-    private var source: DispatchSourceFileSystemObject?
-    private var dirFD: Int32 = -1
+    private var sources: [DispatchSourceFileSystemObject] = []
+    private var fileDescriptors: [Int32] = []
     private let debounceInterval: TimeInterval = 0.15
     private var debounceWorkItem: DispatchWorkItem?
     private let onChange: @MainActor () -> Void
@@ -13,11 +13,23 @@ final class DatabaseWatcher: @unchecked Sendable {
     }
 
     private func startWatching(directory: String) {
-        dirFD = open(directory, O_EVTONLY)
-        guard dirFD >= 0 else { return }
+        // Watch the directory itself (catches file creation/deletion, e.g. journal mode)
+        watchPath(directory)
+
+        // Watch the database file and WAL file directly.
+        // In WAL mode, writes go to the -wal file without triggering directory events.
+        let dbFile = (directory as NSString).appendingPathComponent("beads.db")
+        let walFile = dbFile + "-wal"
+        watchPath(dbFile)
+        watchPath(walFile)
+    }
+
+    private func watchPath(_ path: String) {
+        let fd = open(path, O_EVTONLY)
+        guard fd >= 0 else { return }
 
         let source = DispatchSource.makeFileSystemObjectSource(
-            fileDescriptor: dirFD,
+            fileDescriptor: fd,
             eventMask: [.write, .rename, .delete, .extend],
             queue: .global(qos: .utility)
         )
@@ -26,13 +38,12 @@ final class DatabaseWatcher: @unchecked Sendable {
             self?.scheduleDebounce()
         }
 
-        source.setCancelHandler { [weak self] in
-            if let fd = self?.dirFD, fd >= 0 {
-                close(fd)
-            }
+        source.setCancelHandler {
+            close(fd)
         }
 
-        self.source = source
+        fileDescriptors.append(fd)
+        sources.append(source)
         source.resume()
     }
 
@@ -51,8 +62,11 @@ final class DatabaseWatcher: @unchecked Sendable {
 
     func stop() {
         debounceWorkItem?.cancel()
-        source?.cancel()
-        source = nil
+        for source in sources {
+            source.cancel()
+        }
+        sources.removeAll()
+        fileDescriptors.removeAll()
     }
 
     deinit {
