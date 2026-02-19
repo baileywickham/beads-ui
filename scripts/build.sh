@@ -42,13 +42,16 @@ cp -R "${SPARKLE_FRAMEWORK}" "${APP_BUNDLE}/Contents/Frameworks/"
 # Fix rpath so the binary finds Sparkle.framework in Contents/Frameworks/
 install_name_tool -add_rpath @executable_path/../Frameworks "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
 
-# Code sign (inside-out: nested bundles first, then framework, then app)
+# Code sign (inside-out: all nested executables/bundles, then framework, then app)
+SPARKLE_FW="${APP_BUNDLE}/Contents/Frameworks/Sparkle.framework/Versions/B"
 codesign --force --options runtime --timestamp --sign "${SIGN_IDENTITY}" \
-    "${APP_BUNDLE}/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc"
+    "${SPARKLE_FW}/Autoupdate"
 codesign --force --options runtime --timestamp --sign "${SIGN_IDENTITY}" \
-    "${APP_BUNDLE}/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc"
+    "${SPARKLE_FW}/XPCServices/Downloader.xpc"
 codesign --force --options runtime --timestamp --sign "${SIGN_IDENTITY}" \
-    "${APP_BUNDLE}/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app"
+    "${SPARKLE_FW}/XPCServices/Installer.xpc"
+codesign --force --options runtime --timestamp --sign "${SIGN_IDENTITY}" \
+    "${SPARKLE_FW}/Updater.app"
 codesign --force --options runtime --timestamp --sign "${SIGN_IDENTITY}" \
     "${APP_BUNDLE}/Contents/Frameworks/Sparkle.framework"
 codesign --force --options runtime --timestamp --sign "${SIGN_IDENTITY}" \
