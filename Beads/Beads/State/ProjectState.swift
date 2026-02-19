@@ -11,7 +11,6 @@ final class ProjectState {
     var selectedIssue: Issue?
     var statusFilter: IssueStatus? = .open
     var searchText: String = ""
-    var statusCounts: [IssueStatus: Int] = [:]
     var errorMessage: String?
     var isLoading: Bool = false
     var showCreateSheet: Bool = false
@@ -27,6 +26,14 @@ final class ProjectState {
         } catch {
             self.errorMessage = "Failed to open database: \(error.localizedDescription)"
         }
+    }
+
+    var statusCounts: [IssueStatus: Int] {
+        var counts: [IssueStatus: Int] = [:]
+        for issue in issues {
+            counts[issue.status, default: 0] += 1
+        }
+        return counts
     }
 
     var filteredIssues: [Issue] {
@@ -52,7 +59,6 @@ final class ProjectState {
         defer { isLoading = false }
         do {
             issues = try reader.fetchIssues()
-            statusCounts = try reader.fetchStatusCounts()
             // Refresh selected issue detail
             if let id = selectedIssueId {
                 selectedIssue = try reader.fetchIssue(id: id)
