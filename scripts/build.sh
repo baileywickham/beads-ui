@@ -6,6 +6,7 @@ BUILD_DIR="$(pwd)/.build-app"
 APP_NAME="Beads"
 APP_BUNDLE="${BUILD_DIR}/${APP_NAME}.app"
 SIGN_TOOL="Beads/.build/artifacts/sparkle/Sparkle/bin/sign_update"
+SIGN_IDENTITY="${CODESIGN_IDENTITY:-Developer ID Application: Bailey Wickham (Q9D9H424KQ)}"
 
 echo "==> Building ${APP_NAME} v${VERSION}..."
 
@@ -41,9 +42,17 @@ cp -R "${SPARKLE_FRAMEWORK}" "${APP_BUNDLE}/Contents/Frameworks/"
 # Fix rpath so the binary finds Sparkle.framework in Contents/Frameworks/
 install_name_tool -add_rpath @executable_path/../Frameworks "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
 
-# Ad-hoc sign (framework first, then app)
-codesign --force --sign - "${APP_BUNDLE}/Contents/Frameworks/Sparkle.framework"
-codesign --force --deep --sign - "${APP_BUNDLE}"
+# Code sign (inside-out: nested bundles first, then framework, then app)
+codesign --force --options runtime --timestamp --sign "${SIGN_IDENTITY}" \
+    "${APP_BUNDLE}/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc"
+codesign --force --options runtime --timestamp --sign "${SIGN_IDENTITY}" \
+    "${APP_BUNDLE}/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc"
+codesign --force --options runtime --timestamp --sign "${SIGN_IDENTITY}" \
+    "${APP_BUNDLE}/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app"
+codesign --force --options runtime --timestamp --sign "${SIGN_IDENTITY}" \
+    "${APP_BUNDLE}/Contents/Frameworks/Sparkle.framework"
+codesign --force --options runtime --timestamp --sign "${SIGN_IDENTITY}" \
+    "${APP_BUNDLE}"
 
 echo "==> App bundle created at ${APP_BUNDLE}"
 
@@ -68,13 +77,35 @@ rm -f "${DMG_TEMP}"
 echo "==> DMG created at ${DMG_PATH}"
 
 # Create zip for GitHub release (Sparkle updates use this)
+# Use ditto to preserve macOS metadata required for notarization
 ZIP_NAME="${APP_NAME}-${VERSION}-macOS.zip"
 ZIP_PATH="${BUILD_DIR}/${ZIP_NAME}"
-cd "${BUILD_DIR}"
-zip -ry "${ZIP_NAME}" "${APP_NAME}.app"
-cd ..
+ditto -c -k --sequesterRsrc --keepParent "${APP_BUNDLE}" "${ZIP_PATH}"
 
 echo "==> Zip created at ${ZIP_PATH}"
+
+# Notarize the DMG
+if [ -n "${NOTARY_PASSWORD:-}" ]; then
+    echo "==> Notarizing DMG..."
+    xcrun notarytool submit "${DMG_PATH}" \
+        --apple-id "${APPLE_ID}" \
+        --team-id "${APPLE_TEAM_ID}" \
+        --password "${NOTARY_PASSWORD}" \
+        --wait
+    xcrun stapler staple "${DMG_PATH}"
+    echo "==> DMG notarized and stapled"
+
+    echo "==> Notarizing zip..."
+    xcrun notarytool submit "${ZIP_PATH}" \
+        --apple-id "${APPLE_ID}" \
+        --team-id "${APPLE_TEAM_ID}" \
+        --password "${NOTARY_PASSWORD}" \
+        --wait
+    # Note: stapler cannot staple zip files, only .app/.dmg/.pkg
+    echo "==> Zip notarized"
+else
+    echo "==> NOTARY_PASSWORD not set, skipping notarization"
+fi
 
 # Sign zip for Sparkle auto-updates
 if [ -n "${SPARKLE_SIGNING_KEY:-}" ]; then
