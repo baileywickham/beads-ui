@@ -25,7 +25,10 @@ jobs:
           security unlock-keychain -p "" build.keychain
           security import cert.p12 -k build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+          security list-keychains -d user -s build.keychain
           rm cert.p12
+          echo "Available signing identities:"
+          security find-identity -v -p codesigning build.keychain
 
       - name: Extract version from tag
         id: version
