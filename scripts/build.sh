@@ -6,7 +6,7 @@ BUILD_DIR="$(pwd)/.build-app"
 APP_NAME="Beads"
 APP_BUNDLE="${BUILD_DIR}/${APP_NAME}.app"
 SIGN_TOOL="Beads/.build/artifacts/sparkle/Sparkle/bin/sign_update"
-SIGN_IDENTITY="${CODESIGN_IDENTITY:-Developer ID Application: Bailey Wickham (Q9D9H424KQ)}"
+SIGN_IDENTITY="${CODESIGN_IDENTITY:-Developer ID Application: Usebits corp (Q9D9H424KQ)}"
 
 echo "==> Building ${APP_NAME} v${VERSION}..."
 
