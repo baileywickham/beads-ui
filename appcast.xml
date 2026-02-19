@@ -76,5 +76,13 @@
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
         </item>
 
+        <item>
+            <title>Version 0.2.16</title>
+            <sparkle:version>0.2.16</sparkle:version>
+            <pubDate>Thu, 19 Feb 2026 04:14:42 +0000</pubDate>
+            <enclosure url="https://github.com/baileywickham/beads-ui/releases/download/v0.2.16/Beads-0.2.16-macOS.zip" length="2968351" type="application/octet-stream" sparkle:edSignature="IUZEpS/bh7D+GT5r4xA79Mp4Ci8bo/cAlAp3NiLLf5T+eQCFqeWb6+3Rsh8gAXBNFRu9zz3+9Zujf4TtStRCAA==" />
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+        </item>
+
     </channel>
 </rss>
