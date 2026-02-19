@@ -46,6 +46,7 @@ struct SidebarView: View {
 
                 Divider()
                     .padding(.horizontal, 8)
+                    .padding(.bottom, 4)
             } else if let project = appState.projects.first {
                 HStack {
                     Image(systemName: "circle.hexagongrid")

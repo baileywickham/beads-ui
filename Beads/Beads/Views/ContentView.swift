@@ -118,5 +118,13 @@ struct ContentView: View {
                 state.launchClaude(id)
             }
         }
+        .onKeyPress(keys: [.return], phases: .down) { press in
+            guard press.modifiers.contains(EventModifiers.command) else { return .ignored }
+            if let state = appState.currentProjectState, let id = state.selectedIssueId {
+                state.launchClaude(id)
+                return .handled
+            }
+            return .ignored
+        }
     }
 }

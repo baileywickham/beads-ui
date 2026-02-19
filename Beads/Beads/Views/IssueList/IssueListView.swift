@@ -3,6 +3,8 @@ import SwiftUI
 struct IssueListView: View {
     @Bindable var state: ProjectState
     @FocusState private var isFocused: Bool
+    @State private var commentIssueId: String?
+    @State private var claudeComment = ""
 
     var body: some View {
         issueList
@@ -28,16 +30,40 @@ struct IssueListView: View {
                     return .ignored
                 }
             }
-            .onKeyPress(keys: [.return], phases: .down) { press in
-                guard press.modifiers.contains(EventModifiers.command) else { return .ignored }
-                if let id = state.selectedIssueId {
-                    state.launchClaude(id)
-                    return .handled
-                }
-                return .ignored
-            }
             .onAppear { isFocused = true }
             .frame(minWidth: 280)
+            .sheet(isPresented: Binding(
+                get: { commentIssueId != nil },
+                set: { if !$0 { commentIssueId = nil } }
+            )) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Comment for Claude")
+                        .font(.headline)
+                    TextEditor(text: $claudeComment)
+                        .font(.body)
+                        .scrollContentBackground(.hidden)
+                        .padding(8)
+                        .background(.quaternary.opacity(0.5))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    HStack {
+                        Spacer()
+                        Button("Cancel") {
+                            commentIssueId = nil
+                        }
+                        .keyboardShortcut(.cancelAction)
+                        Button("Launch") {
+                            if let id = commentIssueId {
+                                state.launchClaude(id, comment: claudeComment)
+                            }
+                            commentIssueId = nil
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .keyboardShortcut(.return, modifiers: .command)
+                    }
+                }
+                .padding()
+                .frame(minWidth: 400, minHeight: 200)
+            }
     }
 
     private var issueList: some View {
@@ -69,6 +95,10 @@ struct IssueListView: View {
         }
         Button("Check Relevance") {
             state.launchClaude(issue.id, comment: "Before starting any work, check if this issue is still relevant. The codebase may have changed since this issue was created. Review the current state of the code and determine if this task has already been done, is no longer needed, or needs to be updated. Report your findings and close the issue with `bd close` if it's no longer relevant.")
+        }
+        Button("With Comment...") {
+            claudeComment = ""
+            commentIssueId = issue.id
         }
 
         Divider()

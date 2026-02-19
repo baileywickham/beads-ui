@@ -6,7 +6,7 @@ final class DatabaseReader {
 
     init(path: String) throws {
         var config = Configuration()
-        config.readonly = true
+        config.readonly = false
         config.foreignKeysEnabled = false
         dbQueue = try DatabaseQueue(path: path, configuration: config)
     }
