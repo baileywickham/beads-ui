@@ -2,6 +2,8 @@
 
 A native macOS app for viewing and managing [Beads](https://github.com/baileywickham/beads) issues. Built with SwiftUI.
 
+**[Download latest release](https://github.com/baileywickham/beads-ui/releases/latest)**
+
 ## Features
 
 - Browse and filter issues by status, priority, and search
