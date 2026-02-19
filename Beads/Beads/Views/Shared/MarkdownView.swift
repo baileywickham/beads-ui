@@ -1,3 +1,4 @@
+import MarkdownUI
 import SwiftUI
 
 struct MarkdownView: View {
@@ -8,12 +9,8 @@ struct MarkdownView: View {
             Text("No content")
                 .foregroundStyle(.tertiary)
                 .italic()
-        } else if let attributed = try? AttributedString(markdown: content, options: .init(interpretedSyntax: .full)) {
-            Text(attributed)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
         } else {
-            Text(content)
+            Markdown(content)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
