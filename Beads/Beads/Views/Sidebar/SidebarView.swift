@@ -11,23 +11,21 @@ struct SidebarView: View {
     @State private var selection: StatusFilter = .status(.open)
 
     var body: some View {
-        Group {
+        VStack(spacing: 0) {
+            projectPicker
+
             if let state = appState.currentProjectState {
                 List(selection: $selection) {
-                    Section("Filter") {
-                        Label("All Issues", systemImage: "tray.full")
-                            .badge(state.statusCounts.values.reduce(0, +))
-                            .tag(StatusFilter.all)
-
-                        ForEach(IssueStatus.sidebarStatuses, id: \.self) { status in
-                            Label(status.label, systemImage: status.icon)
-                                .foregroundStyle(status.color)
-                                .badge(state.statusCounts[status] ?? 0)
-                                .tag(StatusFilter.status(status))
-                        }
+                    ForEach(IssueStatus.sidebarStatuses, id: \.self) { status in
+                        Label(status.label, systemImage: status.icon)
+                            .foregroundStyle(status.color)
+                            .badge(state.statusCounts[status] ?? 0)
+                            .tag(StatusFilter.status(status))
                     }
                 }
                 .listStyle(.sidebar)
+                .environment(\.defaultMinListHeaderHeight, 0)
+                .contentMargins(.top, 0)
                 .animation(.default, value: state.statusCounts)
                 .onChange(of: selection) { _, newValue in
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -40,11 +38,9 @@ struct SidebarView: View {
                     }
                 }
             }
-        }
-        .safeAreaInset(edge: .top) {
-            projectPicker
-        }
-        .safeAreaInset(edge: .bottom) {
+
+            Spacer()
+
             if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
                 Text("v\(version)")
                     .font(.caption2)
@@ -91,18 +87,24 @@ struct SidebarView: View {
 
                 Divider()
                     .padding(.horizontal, 8)
-                    .padding(.vertical, 8)
+                    .padding(.bottom, 12)
             }
         } else if let project = appState.projects.first {
-            HStack {
-                Image(systemName: "circle.hexagongrid")
-                    .foregroundStyle(.blue)
-                Text(project.name)
-                    .fontWeight(.semibold)
-                Spacer()
+            VStack(spacing: 0) {
+                HStack {
+                    Image(systemName: "circle.hexagongrid")
+                        .foregroundStyle(.blue)
+                    Text(project.name)
+                        .fontWeight(.semibold)
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+
+                Divider()
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 12)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
         }
     }
 }
