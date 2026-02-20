@@ -121,11 +121,17 @@ if [ -n "${SPARKLE_SIGNING_KEY:-}" ]; then
     if [ -n "${SPARKLE_CHANNEL:-}" ]; then
         CHANNEL_LINE="            <sparkle:channel>${SPARKLE_CHANNEL}</sparkle:channel>"
     fi
+    SHORT_VERSION_LINE=""
+    APPCAST_VERSION="${SPARKLE_VERSION:-${VERSION}}"
+    if [ "${APPCAST_VERSION}" != "${VERSION}" ]; then
+        SHORT_VERSION_LINE="            <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>"
+    fi
     cat > "${APPCAST_ITEM}" <<XMLEOF
         <item>
             <title>Version ${VERSION}</title>
-            <sparkle:version>${VERSION}</sparkle:version>
-${CHANNEL_LINE:+${CHANNEL_LINE}
+            <sparkle:version>${APPCAST_VERSION}</sparkle:version>
+${SHORT_VERSION_LINE:+${SHORT_VERSION_LINE}
+}${CHANNEL_LINE:+${CHANNEL_LINE}
 }            <pubDate>${PUB_DATE}</pubDate>
             <enclosure url="https://github.com/baileywickham/beads-ui/releases/download/v${VERSION}/${ZIP_NAME}" length="${ZIP_SIZE}" type="application/octet-stream" sparkle:edSignature="${SIGNATURE}" />
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>

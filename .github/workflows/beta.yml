@@ -37,15 +37,19 @@ jobs:
           LATEST_TAG=$(git tag --list 'v[0-9]*' --sort=-v:refname | grep -v -- '-' | head -1)
           LATEST_TAG="${LATEST_TAG:-v0.0.0}"
           BASE_VERSION="${LATEST_TAG#v}"
-          # Bump patch so beta sorts higher than current release
           MAJOR=$(echo "$BASE_VERSION" | cut -d. -f1)
           MINOR=$(echo "$BASE_VERSION" | cut -d. -f2)
           PATCH=$(echo "$BASE_VERSION" | cut -d. -f3)
           NEXT_PATCH=$((PATCH + 1))
           COMMIT_COUNT=$(git rev-list "${LATEST_TAG}..HEAD" --count)
+          # Display version for tag/title (e.g. 0.2.25-beta.7)
           BETA_VERSION="${MAJOR}.${MINOR}.${NEXT_PATCH}-beta.${COMMIT_COUNT}"
+          # Sparkle comparison version using 4-component dotted format
+          # so Sparkle can compare numerically (e.g. 0.2.25.7)
+          SPARKLE_VERSION="${MAJOR}.${MINOR}.${NEXT_PATCH}.${COMMIT_COUNT}"
           echo "version=${BETA_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "==> Beta version: ${BETA_VERSION}"
+          echo "sparkle_version=${SPARKLE_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "==> Beta version: ${BETA_VERSION} (sparkle: ${SPARKLE_VERSION})"
 
       - name: Detect signing identity
         id: identity
@@ -56,6 +60,7 @@ jobs:
           CODESIGN_IDENTITY: ${{ steps.identity.outputs.identity }}
           SPARKLE_SIGNING_KEY: ${{ secrets.SPARKLE_SIGNING_KEY }}
           SPARKLE_CHANNEL: beta
+          SPARKLE_VERSION: ${{ steps.version.outputs.sparkle_version }}
         run: ./scripts/build.sh "${{ steps.version.outputs.version }}"
 
       - name: Update appcast.xml
