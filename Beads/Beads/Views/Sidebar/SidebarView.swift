@@ -46,7 +46,6 @@ struct SidebarView: View {
 
                 Divider()
                     .padding(.horizontal, 8)
-                    .padding(.bottom, 4)
             } else if let project = appState.projects.first {
                 HStack {
                     Image(systemName: "circle.hexagongrid")
@@ -76,6 +75,7 @@ struct SidebarView: View {
                     }
                 }
                 .listStyle(.sidebar)
+                .contentMargins(.top, 8)
                 .animation(.default, value: state.statusCounts)
                 .onChange(of: selection) { _, newValue in
                     withAnimation(.easeInOut(duration: 0.2)) {
