@@ -21,7 +21,7 @@ enum GhosttyLauncher {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/Applications/Ghostty.app/Contents/MacOS/ghostty")
         process.currentDirectoryURL = URL(fileURLWithPath: projectPath)
-        process.arguments = ["-e", "/bin/zsh", "-li", "-c", script]
+        process.arguments = ["--config-override=window-save-state=never", "-e", "/bin/zsh", "-li", "-c", script]
 
         try process.run()
     }
