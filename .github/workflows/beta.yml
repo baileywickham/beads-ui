@@ -1,0 +1,79 @@
+name: Beta
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'appcast.xml'
+  workflow_dispatch:
+
+jobs:
+  beta:
+    runs-on: macos-26
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Import signing certificate
+        env:
+          CERTIFICATE_P12: ${{ secrets.CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+        run: |
+          echo "$CERTIFICATE_P12" | base64 --decode > cert.p12
+          security create-keychain -p "" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "" build.keychain
+          security import cert.p12 -k build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+          security list-keychains -d user -s build.keychain
+          rm cert.p12
+
+      - name: Calculate beta version
+        id: version
+        run: |
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          BASE_VERSION="${LATEST_TAG#v}"
+          COMMIT_COUNT=$(git rev-list "${LATEST_TAG}..HEAD" --count)
+          BETA_VERSION="${BASE_VERSION}-beta.${COMMIT_COUNT}"
+          echo "version=${BETA_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "==> Beta version: ${BETA_VERSION}"
+
+      - name: Detect signing identity
+        id: identity
+        run: echo "identity=$(security find-identity -v -p codesigning build.keychain | head -1 | sed 's/.*"\(.*\)".*/\1/')" >> "$GITHUB_OUTPUT"
+
+      - name: Build and sign (no notarization)
+        env:
+          CODESIGN_IDENTITY: ${{ steps.identity.outputs.identity }}
+          SPARKLE_SIGNING_KEY: ${{ secrets.SPARKLE_SIGNING_KEY }}
+          SPARKLE_CHANNEL: beta
+        run: ./scripts/build.sh "${{ steps.version.outputs.version }}"
+
+      - name: Update appcast.xml
+        if: env.SPARKLE_SIGNING_KEY != ''
+        env:
+          SPARKLE_SIGNING_KEY: ${{ secrets.SPARKLE_SIGNING_KEY }}
+        run: ./scripts/update-appcast.sh
+
+      - name: Commit and push appcast
+        if: env.SPARKLE_SIGNING_KEY != ''
+        env:
+          SPARKLE_SIGNING_KEY: ${{ secrets.SPARKLE_SIGNING_KEY }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add appcast.xml
+          git commit -m "Update appcast.xml for beta v${{ steps.version.outputs.version }}" || true
+          git push origin main
+
+      - name: Create GitHub pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          prerelease: true
+          generate_release_notes: true
+          files: |
+            .build-app/Beads-${{ steps.version.outputs.version }}-macOS.zip

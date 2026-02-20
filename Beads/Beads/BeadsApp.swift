@@ -1,14 +1,26 @@
 import SwiftUI
 import Sparkle
 
+final class UpdaterDelegate: NSObject, SPUUpdaterDelegate {
+    func allowedChannels(for updater: SPUUpdater) -> Set<String> {
+        UserDefaults.standard.bool(forKey: "betaUpdates") ? Set(["beta"]) : Set()
+    }
+}
+
 @main
 struct BeadsApp: App {
     @State private var appState = AppState()
-    private let updaterController = SPUStandardUpdaterController(
-        startingUpdater: true,
-        updaterDelegate: nil,
-        userDriverDelegate: nil
-    )
+    @State private var betaUpdates = UserDefaults.standard.bool(forKey: "betaUpdates")
+    private let updaterDelegate = UpdaterDelegate()
+    private let updaterController: SPUStandardUpdaterController
+
+    init() {
+        updaterController = SPUStandardUpdaterController(
+            startingUpdater: true,
+            updaterDelegate: updaterDelegate,
+            userDriverDelegate: nil
+        )
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -18,6 +30,10 @@ struct BeadsApp: App {
             BeadsCommands()
             CommandGroup(after: .appInfo) {
                 CheckForUpdatesView(updater: updaterController.updater)
+                Toggle("Beta Updates", isOn: $betaUpdates)
+                    .onChange(of: betaUpdates) { _, newValue in
+                        UserDefaults.standard.set(newValue, forKey: "betaUpdates")
+                    }
             }
         }
         .defaultSize(width: 1200, height: 800)

@@ -117,11 +117,16 @@ if [ -n "${SPARKLE_SIGNING_KEY:-}" ]; then
     # Generate appcast item XML
     PUB_DATE=$(date -R)
     APPCAST_ITEM="${BUILD_DIR}/appcast-item.xml"
+    CHANNEL_LINE=""
+    if [ -n "${SPARKLE_CHANNEL:-}" ]; then
+        CHANNEL_LINE="            <sparkle:channel>${SPARKLE_CHANNEL}</sparkle:channel>"
+    fi
     cat > "${APPCAST_ITEM}" <<XMLEOF
         <item>
             <title>Version ${VERSION}</title>
             <sparkle:version>${VERSION}</sparkle:version>
-            <pubDate>${PUB_DATE}</pubDate>
+${CHANNEL_LINE:+${CHANNEL_LINE}
+}            <pubDate>${PUB_DATE}</pubDate>
             <enclosure url="https://github.com/baileywickham/beads-ui/releases/download/v${VERSION}/${ZIP_NAME}" length="${ZIP_SIZE}" type="application/octet-stream" sparkle:edSignature="${SIGNATURE}" />
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
         </item>
