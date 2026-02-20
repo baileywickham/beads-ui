@@ -43,7 +43,6 @@ struct SidebarView: View {
                     .padding(.vertical, 8)
                 }
                 .menuStyle(.borderlessButton)
-                .padding(.top, 8)
 
                 Divider()
                     .padding(.horizontal, 8)
@@ -57,7 +56,6 @@ struct SidebarView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .padding(.top, 8)
             }
 
             // Status filters
@@ -97,6 +95,7 @@ struct SidebarView: View {
                     .padding(.bottom, 8)
             }
         }
+        .padding(.top, 12)
         .frame(minWidth: 180)
     }
 }
