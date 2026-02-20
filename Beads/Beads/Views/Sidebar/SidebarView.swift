@@ -59,7 +59,7 @@ struct SidebarView: View {
             }
 
             Spacer()
-                .frame(height: 12)
+                .frame(height: 24)
 
             // Status filters
             if let state = appState.currentProjectState {
