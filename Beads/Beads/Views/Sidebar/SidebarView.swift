@@ -11,9 +11,54 @@ struct SidebarView: View {
     @State private var selection: StatusFilter = .status(.open)
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Project picker
-            if appState.projects.count > 1 {
+        Group {
+            if let state = appState.currentProjectState {
+                List(selection: $selection) {
+                    Section("Filter") {
+                        Label("All Issues", systemImage: "tray.full")
+                            .badge(state.statusCounts.values.reduce(0, +))
+                            .tag(StatusFilter.all)
+
+                        ForEach(IssueStatus.sidebarStatuses, id: \.self) { status in
+                            Label(status.label, systemImage: status.icon)
+                                .foregroundStyle(status.color)
+                                .badge(state.statusCounts[status] ?? 0)
+                                .tag(StatusFilter.status(status))
+                        }
+                    }
+                }
+                .listStyle(.sidebar)
+                .animation(.default, value: state.statusCounts)
+                .onChange(of: selection) { _, newValue in
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        switch newValue {
+                        case .all:
+                            state.statusFilter = nil
+                        case .status(let status):
+                            state.statusFilter = status
+                        }
+                    }
+                }
+            }
+        }
+        .safeAreaInset(edge: .top) {
+            projectPicker
+        }
+        .safeAreaInset(edge: .bottom) {
+            if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
+                Text("v\(version)")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .padding(.bottom, 8)
+            }
+        }
+        .frame(minWidth: 180)
+    }
+
+    @ViewBuilder
+    private var projectPicker: some View {
+        if appState.projects.count > 1 {
+            VStack(spacing: 0) {
                 Menu {
                     ForEach(appState.projects) { project in
                         Button {
@@ -46,56 +91,17 @@ struct SidebarView: View {
 
                 Divider()
                     .padding(.horizontal, 8)
-            } else if let project = appState.projects.first {
-                HStack {
-                    Image(systemName: "circle.hexagongrid")
-                        .foregroundStyle(.blue)
-                    Text(project.name)
-                        .fontWeight(.semibold)
-                    Spacer()
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
             }
-
-            // Status filters
-            if let state = appState.currentProjectState {
-                List(selection: $selection) {
-                    Section("Filter") {
-                        Label("All Issues", systemImage: "tray.full")
-                            .badge(state.statusCounts.values.reduce(0, +))
-                            .tag(StatusFilter.all)
-
-                        ForEach(IssueStatus.sidebarStatuses, id: \.self) { status in
-                            Label(status.label, systemImage: status.icon)
-                                .foregroundStyle(status.color)
-                                .badge(state.statusCounts[status] ?? 0)
-                                .tag(StatusFilter.status(status))
-                        }
-                    }
-                }
-                .listStyle(.sidebar)
-                .animation(.default, value: state.statusCounts)
-                .onChange(of: selection) { _, newValue in
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        switch newValue {
-                        case .all:
-                            state.statusFilter = nil
-                        case .status(let status):
-                            state.statusFilter = status
-                        }
-                    }
-                }
+        } else if let project = appState.projects.first {
+            HStack {
+                Image(systemName: "circle.hexagongrid")
+                    .foregroundStyle(.blue)
+                Text(project.name)
+                    .fontWeight(.semibold)
+                Spacer()
             }
-            // Version
-            if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
-                Text("v\(version)")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .padding(.bottom, 8)
-            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
         }
-        .padding(.top, 12)
-        .frame(minWidth: 180)
     }
 }
