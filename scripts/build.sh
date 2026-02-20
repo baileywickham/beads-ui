@@ -27,7 +27,16 @@ mkdir -p "${APP_BUNDLE}/Contents/Resources"
 cp "Beads/.build/release/${APP_NAME}" "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
 
 # Copy Info.plist with version injected
-sed "s/0.1.0/${VERSION}/g" Beads/Beads/Info.plist > "${APP_BUNDLE}/Contents/Info.plist"
+# CFBundleShortVersionString = display version (e.g. 0.2.25-beta.18)
+# CFBundleVersion = Sparkle comparison version (must match sparkle:version in appcast)
+BUNDLE_VERSION="${SPARKLE_VERSION:-${VERSION}}"
+python3 -c "
+content = open('Beads/Beads/Info.plist').read()
+# First 0.1.0 is CFBundleShortVersionString, second is CFBundleVersion
+content = content.replace('0.1.0', '${VERSION}', 1)
+content = content.replace('0.1.0', '${BUNDLE_VERSION}', 1)
+open('${APP_BUNDLE}/Contents/Info.plist', 'w').write(content)
+"
 
 # Copy resources if they exist
 if [ -d "Beads/Beads/Assets.xcassets" ]; then
