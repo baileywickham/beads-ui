@@ -43,6 +43,7 @@ struct SidebarView: View {
                     .padding(.vertical, 8)
                 }
                 .menuStyle(.borderlessButton)
+                .padding(.top, 8)
 
                 Divider()
                     .padding(.horizontal, 8)
@@ -56,10 +57,8 @@ struct SidebarView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
+                .padding(.top, 8)
             }
-
-            Spacer()
-                .frame(height: 24)
 
             // Status filters
             if let state = appState.currentProjectState {
