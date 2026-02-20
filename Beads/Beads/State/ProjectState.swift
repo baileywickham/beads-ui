@@ -17,6 +17,7 @@ final class ProjectState {
 
     private var dbReader: DatabaseReader?
     private var watcher: DatabaseWatcher?
+    private var lastLaunchTime: ContinuousClock.Instant = .now - .seconds(10)
 
     init(project: Project, cliExecutor: CLIExecutor) {
         self.project = project
@@ -230,6 +231,10 @@ final class ProjectState {
     }
 
     func launchClaude(_ issueId: String, comment: String? = nil) {
+        let now = ContinuousClock.Instant.now
+        guard now - lastLaunchTime > .seconds(1) else { return }
+        lastLaunchTime = now
+
         guard let issue = (selectedIssue?.id == issueId ? selectedIssue : nil)
                 ?? issues.first(where: { $0.id == issueId }) else { return }
         Task {
