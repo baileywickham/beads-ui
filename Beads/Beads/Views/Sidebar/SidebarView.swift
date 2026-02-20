@@ -85,10 +85,6 @@ struct SidebarView: View {
                 }
                 .menuStyle(.borderlessButton)
 
-                Text("PADDING TEST")
-                    .font(.caption)
-                    .foregroundStyle(.red)
-
                 Divider()
                     .padding(.horizontal, 8)
                     .padding(.bottom, 12)
