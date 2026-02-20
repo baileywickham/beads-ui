@@ -16,6 +16,10 @@ struct SidebarView: View {
 
             if let state = appState.currentProjectState {
                 List(selection: $selection) {
+                    Label("All Issues", systemImage: "tray.full")
+                        .badge(state.statusCounts.values.reduce(0, +))
+                        .tag(StatusFilter.all)
+
                     ForEach(IssueStatus.sidebarStatuses, id: \.self) { status in
                         Label(status.label, systemImage: status.icon)
                             .foregroundStyle(status.color)
@@ -24,8 +28,6 @@ struct SidebarView: View {
                     }
                 }
                 .listStyle(.sidebar)
-                .environment(\.defaultMinListHeaderHeight, 0)
-                .contentMargins(.top, 0)
                 .animation(.default, value: state.statusCounts)
                 .onChange(of: selection) { _, newValue in
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -87,7 +89,7 @@ struct SidebarView: View {
 
                 Divider()
                     .padding(.horizontal, 8)
-                    .padding(.bottom, 12)
+                    .padding(.vertical, 8)
             }
         } else if let project = appState.projects.first {
             VStack(spacing: 0) {
@@ -103,7 +105,7 @@ struct SidebarView: View {
 
                 Divider()
                     .padding(.horizontal, 8)
-                    .padding(.bottom, 12)
+                    .padding(.vertical, 8)
             }
         }
     }
