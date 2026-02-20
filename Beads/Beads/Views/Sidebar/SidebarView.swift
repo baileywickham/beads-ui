@@ -91,6 +91,7 @@ struct SidebarView: View {
 
                 Divider()
                     .padding(.horizontal, 8)
+                    .padding(.vertical, 8)
             }
         } else if let project = appState.projects.first {
             HStack {
