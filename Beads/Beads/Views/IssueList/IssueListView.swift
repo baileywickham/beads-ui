@@ -17,7 +17,7 @@ struct IssueListView: View {
             .overlay { emptyState }
             .focusable()
             .focused($isFocused)
-            .onKeyPress(characters: CharacterSet(charactersIn: "jk")) { press in
+            .onKeyPress(characters: CharacterSet(charactersIn: "jke")) { press in
                 guard isFocused else { return .ignored }
                 switch press.characters {
                 case "j":
@@ -25,6 +25,11 @@ struct IssueListView: View {
                     return .handled
                 case "k":
                     state.selectPreviousIssue()
+                    return .handled
+                case "e":
+                    if let id = state.selectedIssueId {
+                        state.closeAndAdvance(id)
+                    }
                     return .handled
                 default:
                     return .ignored
