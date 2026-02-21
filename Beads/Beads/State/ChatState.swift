@@ -27,7 +27,7 @@ final class ChatState {
         messages.append(ChatMessage(role: .user, text: trimmed))
 
         let assistantIndex = messages.count
-        messages.append(ChatMessage(role: .assistant, text: ""))
+        messages.append(ChatMessage(role: .assistant))
         isStreaming = true
 
         let currentSessionId = sessionId
@@ -53,22 +53,17 @@ final class ChatState {
                     switch event {
                     case .textDelta(let delta):
                         if assistantIndex < messages.count {
-                            messages[assistantIndex].text += delta
+                            messages[assistantIndex].appendText(delta)
                         }
                     case .sessionId(let sid):
                         sessionId = sid
                     case .toolUse(let id, let name, let input):
-                        if assistantIndex < messages.count,
-                           !messages[assistantIndex].toolCalls.contains(where: { $0.id == id }) {
-                            messages[assistantIndex].toolCalls.append(
-                                ChatMessage.ToolCall(id: id, name: name, input: input)
-                            )
+                        if assistantIndex < messages.count {
+                            messages[assistantIndex].addToolCall(id: id, name: name, input: input)
                         }
                     case .toolResult(let toolUseId, let content):
-                        if assistantIndex < messages.count,
-                           let idx = messages[assistantIndex].toolCalls.firstIndex(where: { $0.id == toolUseId }),
-                           messages[assistantIndex].toolCalls[idx].result == nil {
-                            messages[assistantIndex].toolCalls[idx].result = content
+                        if assistantIndex < messages.count {
+                            messages[assistantIndex].setToolResult(toolUseId: toolUseId, content: content)
                         }
                     case .completed:
                         break
@@ -80,8 +75,7 @@ final class ChatState {
                 errorMessage = error.localizedDescription
                 // Remove assistant message if it has no visible content
                 if assistantIndex < messages.count
-                    && messages[assistantIndex].text.isEmpty
-                    && messages[assistantIndex].toolCalls.isEmpty {
+                    && messages[assistantIndex].blocks.isEmpty {
                     messages.remove(at: assistantIndex)
                 }
             }

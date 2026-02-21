@@ -64,7 +64,7 @@ struct ChatView: View {
                 .onChange(of: chatState.messages.count) {
                     scrollToBottom(proxy)
                 }
-                .onChange(of: chatState.messages.last?.toolCalls.count) {
+                .onChange(of: chatState.messages.last?.blocks.count) {
                     scrollToBottom(proxy)
                 }
             }
@@ -279,28 +279,31 @@ struct ChatView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 10))
             }
         case .assistant:
+            let isLast = message.id == chatState.messages.last?.id
             HStack {
-                if message.text.isEmpty && message.toolCalls.isEmpty && chatState.isStreaming {
+                if message.blocks.isEmpty && chatState.isStreaming {
                     ProgressView()
                         .controlSize(.small)
                         .padding(10)
                 } else {
                     VStack(alignment: .leading, spacing: 8) {
-                        if !message.text.isEmpty {
-                            if chatState.isStreaming && message.id == chatState.messages.last?.id {
-                                Text(message.text)
-                                    .font(.callout)
-                                    .textSelection(.enabled)
-                            } else {
-                                MarkdownView(content: message.text)
-                                    .font(.callout)
+                        ForEach(message.blocks) { block in
+                            switch block.content {
+                            case .text(let text):
+                                if chatState.isStreaming && isLast {
+                                    Text(text)
+                                        .font(.callout)
+                                        .textSelection(.enabled)
+                                } else {
+                                    MarkdownView(content: text)
+                                        .font(.callout)
+                                }
+                            case .toolCall(let name, let input, let result):
+                                ToolCallView(
+                                    toolCall: ChatMessage.ToolCall(id: block.id, name: name, input: input, result: result),
+                                    isStreaming: chatState.isStreaming && isLast
+                                )
                             }
-                        }
-                        ForEach(message.toolCalls) { toolCall in
-                            ToolCallView(
-                                toolCall: toolCall,
-                                isStreaming: chatState.isStreaming && message.id == chatState.messages.last?.id
-                            )
                         }
                     }
                     .padding(10)
