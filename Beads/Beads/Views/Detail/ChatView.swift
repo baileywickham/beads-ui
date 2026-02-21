@@ -97,6 +97,7 @@ struct ChatView: View {
                     .textFieldStyle(.plain)
                     .lineLimit(1...8)
                     .focused($isInputFocused)
+                    .disabled(chatState.isStreaming)
                     .onSubmit {
                         if !NSEvent.modifierFlags.contains(.shift) {
                             send()

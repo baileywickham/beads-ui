@@ -446,4 +446,128 @@ struct ChatStateTests {
         #expect(prompt!.hasPrefix("Issue PROJ-42: Fix it"))
         #expect(prompt!.hasSuffix("start over"))
     }
+
+    // MARK: - Streaming guard
+
+    @MainActor
+    @Test func sendWhileStreamingDropsMessageAndPreservesInput() async {
+        let state = ChatState(projectPath: "/tmp")
+        state.streamProvider = { @Sendable _, _, _ in
+            AsyncThrowingStream { _ in }
+        }
+        state.sendMessage("first")
+        #expect(state.isStreaming)
+        #expect(state.messages.count == 2)
+
+        // Attempt to send while streaming — should be silently rejected
+        state.sendMessage("second")
+        #expect(state.messages.count == 2)
+        #expect(state.messages[0].text == "first")
+
+        state.cancel()
+    }
+
+    @MainActor
+    @Test func sendAfterStreamCompletes() async {
+        let state = ChatState(projectPath: "/tmp")
+        state.streamProvider = Self.mockProvider(events: [
+            .textDelta("reply1"),
+            .completed,
+        ])
+        state.sendMessage("first")
+        while state.isStreaming { await Task.yield() }
+
+        #expect(!state.isStreaming)
+        #expect(state.messages.count == 2)
+
+        state.streamProvider = Self.mockProvider(events: [
+            .textDelta("reply2"),
+            .completed,
+        ])
+        state.sendMessage("second")
+        while state.isStreaming { await Task.yield() }
+
+        #expect(state.messages.count == 4)
+        #expect(state.messages[2].text == "second")
+        #expect(state.messages[3].text == "reply2")
+    }
+
+    @MainActor
+    @Test func cancelDuringStreamThenSendSucceeds() async {
+        let state = ChatState(projectPath: "/tmp")
+        state.streamProvider = { @Sendable _, _, _ in
+            AsyncThrowingStream { _ in }
+        }
+        state.sendMessage("first")
+        #expect(state.isStreaming)
+
+        state.cancel()
+        #expect(!state.isStreaming)
+
+        // Should be able to send again immediately
+        let (provider, getPrompt) = Self.capturingProvider()
+        state.streamProvider = provider
+        state.sendMessage("retry")
+        while state.isStreaming { await Task.yield() }
+
+        #expect(getPrompt() == "retry")
+        #expect(state.messages.last?.text == "ok")
+    }
+
+    @MainActor
+    @Test func clearWhileStreamingStopsAndResets() async {
+        let state = ChatState(projectPath: "/tmp")
+        state.streamProvider = { @Sendable _, _, _ in
+            AsyncThrowingStream { _ in }
+        }
+        state.sendMessage("go")
+        #expect(state.isStreaming)
+
+        state.clear()
+        #expect(!state.isStreaming)
+        #expect(state.messages.isEmpty)
+        #expect(state.sessionId == nil)
+    }
+
+    // MARK: - Issue context formatting
+
+    @MainActor
+    @Test func issueContextIncludesAllFields() async {
+        let state = ChatState(projectPath: "/tmp")
+        state.issueContext = "Issue PROJ-1: Title\nDescription: desc\nDesign: design\nAcceptance Criteria: ac\nNotes: notes"
+
+        let (provider, getPrompt) = Self.capturingProvider()
+        state.streamProvider = provider
+        state.sendMessage("go")
+        while state.isStreaming { await Task.yield() }
+
+        let prompt = getPrompt()!
+        #expect(prompt.contains("Description: desc"))
+        #expect(prompt.contains("Design: design"))
+        #expect(prompt.contains("Acceptance Criteria: ac"))
+        #expect(prompt.contains("Notes: notes"))
+        #expect(prompt.hasSuffix("go"))
+    }
+
+    @MainActor
+    @Test func multipleSessionsPreserveIndependentState() async {
+        let state1 = ChatState(projectPath: "/tmp")
+        let state2 = ChatState(projectPath: "/tmp")
+
+        state1.issueContext = "Issue A"
+        state2.issueContext = "Issue B"
+
+        let (provider1, getPrompt1) = Self.capturingProvider()
+        state1.streamProvider = provider1
+        state1.sendMessage("hello")
+        while state1.isStreaming { await Task.yield() }
+
+        let (provider2, getPrompt2) = Self.capturingProvider()
+        state2.streamProvider = provider2
+        state2.sendMessage("world")
+        while state2.isStreaming { await Task.yield() }
+
+        #expect(getPrompt1()!.hasPrefix("Issue A"))
+        #expect(getPrompt2()!.hasPrefix("Issue B"))
+    }
 }

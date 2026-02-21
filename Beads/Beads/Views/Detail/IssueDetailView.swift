@@ -17,96 +17,91 @@ struct IssueDetailView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Tab bar
-            HStack(spacing: 0) {
-                tabButton("Details", tab: .comments)
-                tabButton("Chat", tab: .chat)
-                Spacer()
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 8)
+            // Issue details scroll area
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    // Header
+                    header
 
-            Divider()
-                .padding(.top, 4)
+                    // Metadata
+                    GroupBox {
+                        IssueMetadataView(
+                            issue: issue,
+                            onStatusChange: { status in
+                                state.updateStatus(issue.id, to: status)
+                            },
+                            onPriorityChange: { priority in
+                                state.updatePriority(issue.id, to: priority)
+                            }
+                        )
+                        .padding(4)
+                    }
 
-            switch selectedTab {
-            case .comments:
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        // Header
-                        header
+                    // Description
+                    IssueMarkdownSection(
+                        title: "Description",
+                        content: issue.description,
+                        onSave: { text in
+                            state.updateField(issue.id, field: "description", value: text)
+                        }
+                    )
 
-                        // Metadata
+                    // Design
+                    if !issue.design.isEmpty {
+                        IssueMarkdownSection(
+                            title: "Design",
+                            content: issue.design,
+                            onSave: { text in
+                                state.updateField(issue.id, field: "design", value: text)
+                            }
+                        )
+                    }
+
+                    // Acceptance Criteria
+                    if !issue.acceptanceCriteria.isEmpty {
+                        IssueMarkdownSection(
+                            title: "Acceptance Criteria",
+                            content: issue.acceptanceCriteria,
+                            onSave: { text in
+                                state.updateField(issue.id, field: "acceptance", value: text)
+                            }
+                        )
+                    }
+
+                    // Notes
+                    if !issue.notes.isEmpty {
+                        IssueMarkdownSection(
+                            title: "Notes",
+                            content: issue.notes,
+                            onSave: { text in
+                                state.updateField(issue.id, field: "notes", value: text)
+                            }
+                        )
+                    }
+
+                    // Dependencies
+                    if !issue.dependencies.isEmpty {
                         GroupBox {
-                            IssueMetadataView(
-                                issue: issue,
-                                onStatusChange: { status in
-                                    state.updateStatus(issue.id, to: status)
-                                },
-                                onPriorityChange: { priority in
-                                    state.updatePriority(issue.id, to: priority)
+                            IssueDependenciesView(
+                                dependencies: issue.dependencies,
+                                onSelect: { id in
+                                    state.loadIssueDetail(id: id)
+                                    state.selectedIssueId = id
                                 }
                             )
                             .padding(4)
                         }
+                    }
 
-                        // Description
-                        IssueMarkdownSection(
-                            title: "Description",
-                            content: issue.description,
-                            onSave: { text in
-                                state.updateField(issue.id, field: "description", value: text)
-                            }
-                        )
+                    // Tab bar
+                    HStack(spacing: 0) {
+                        tabButton("Comments", tab: .comments)
+                        tabButton("Chat", tab: .chat)
+                        Spacer()
+                    }
 
-                        // Design
-                        if !issue.design.isEmpty {
-                            IssueMarkdownSection(
-                                title: "Design",
-                                content: issue.design,
-                                onSave: { text in
-                                    state.updateField(issue.id, field: "design", value: text)
-                                }
-                            )
-                        }
-
-                        // Acceptance Criteria
-                        if !issue.acceptanceCriteria.isEmpty {
-                            IssueMarkdownSection(
-                                title: "Acceptance Criteria",
-                                content: issue.acceptanceCriteria,
-                                onSave: { text in
-                                    state.updateField(issue.id, field: "acceptance", value: text)
-                                }
-                            )
-                        }
-
-                        // Notes
-                        if !issue.notes.isEmpty {
-                            IssueMarkdownSection(
-                                title: "Notes",
-                                content: issue.notes,
-                                onSave: { text in
-                                    state.updateField(issue.id, field: "notes", value: text)
-                                }
-                            )
-                        }
-
-                        // Dependencies
-                        if !issue.dependencies.isEmpty {
-                            GroupBox {
-                                IssueDependenciesView(
-                                    dependencies: issue.dependencies,
-                                    onSelect: { id in
-                                        state.loadIssueDetail(id: id)
-                                        state.selectedIssueId = id
-                                    }
-                                )
-                                .padding(4)
-                            }
-                        }
-
-                        // Comments
+                    // Comments (inside scroll)
+                    if selectedTab == .comments {
                         IssueCommentsView(
                             comments: issue.comments,
                             onAdd: { text in
@@ -114,9 +109,13 @@ struct IssueDetailView: View {
                             }
                         )
                     }
-                    .padding(20)
                 }
-            case .chat:
+                .padding(20)
+            }
+            .frame(maxHeight: selectedTab == .chat ? 280 : .infinity)
+
+            // Chat (outside scroll, pinned below)
+            if selectedTab == .chat {
                 ChatView(chatState: state.chatState(for: issue), issue: issue)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
