@@ -33,6 +33,13 @@ struct ChatView: View {
                         }
                     }
                 }
+                .onChange(of: chatState.messages.last?.toolCalls.count) {
+                    if let last = chatState.messages.last {
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            proxy.scrollTo(last.id, anchor: .bottom)
+                        }
+                    }
+                }
             }
 
             // Error banner
@@ -110,6 +117,55 @@ struct ChatView: View {
         chatState.sendMessage(text)
     }
 
+    private struct ToolCallView: View {
+        let toolCall: ChatMessage.ToolCall
+        @State private var isExpanded = false
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 4) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        isExpanded.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "wrench.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text(toolCall.name)
+                            .font(.caption)
+                            .fontWeight(.medium)
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+
+                if isExpanded {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(toolCall.input)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(5)
+
+                        if let result = toolCall.result {
+                            Divider()
+                            Text(result)
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(10)
+                        }
+                    }
+                    .padding(6)
+                    .background(.quaternary.opacity(0.3))
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                }
+            }
+        }
+    }
+
     @ViewBuilder
     private func messageBubble(_ message: ChatMessage) -> some View {
         switch message.role {
@@ -123,16 +179,23 @@ struct ChatView: View {
             }
         case .assistant:
             HStack {
-                if message.text.isEmpty && chatState.isStreaming {
+                if message.text.isEmpty && message.toolCalls.isEmpty && chatState.isStreaming {
                     ProgressView()
                         .controlSize(.small)
                         .padding(10)
                 } else {
-                    MarkdownView(content: message.text)
-                        .font(.callout)
-                        .padding(10)
-                        .background(.quaternary.opacity(0.3))
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                    VStack(alignment: .leading, spacing: 6) {
+                        if !message.text.isEmpty {
+                            MarkdownView(content: message.text)
+                                .font(.callout)
+                        }
+                        ForEach(message.toolCalls) { toolCall in
+                            ToolCallView(toolCall: toolCall)
+                        }
+                    }
+                    .padding(10)
+                    .background(.quaternary.opacity(0.3))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
                 Spacer(minLength: 60)
             }

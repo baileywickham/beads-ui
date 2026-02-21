@@ -136,4 +136,83 @@ struct ClaudeProcessParsingTests {
         let result = ClaudeProcess.parseJsonResponse(data)
         #expect(result == nil)
     }
+
+    // MARK: - Tool use parsing
+
+    @Test func toolUseInAssistantContent() {
+        let json = """
+        {"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu-1","name":"Read","input":{"path":"/tmp"}}]}}
+        """
+        let result = ClaudeProcess.parseStreamLine(json)
+        #expect(result.events.count == 1)
+        guard case .toolUse(let id, let name, let input) = result.events.first else {
+            Issue.record("Expected toolUse, got \(result.events)")
+            return
+        }
+        #expect(id == "tu-1")
+        #expect(name == "Read")
+        #expect(input.contains("/tmp"))
+    }
+
+    @Test func toolResultInUserContent() {
+        let json = """
+        {"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu-1","content":[{"text":"file contents"}]}]}}
+        """
+        let result = ClaudeProcess.parseStreamLine(json)
+        #expect(result.events.count == 1)
+        guard case .toolResult(let toolUseId, let content) = result.events.first else {
+            Issue.record("Expected toolResult, got \(result.events)")
+            return
+        }
+        #expect(toolUseId == "tu-1")
+        #expect(content == "file contents")
+    }
+
+    @Test func mixedTextAndToolUse() {
+        let json = """
+        {"type":"assistant","message":{"content":[{"text":"checking..."},{"type":"tool_use","id":"tu-2","name":"Bash","input":{"command":"ls"}}]}}
+        """
+        let result = ClaudeProcess.parseStreamLine(json)
+        #expect(result.events.count == 2)
+        guard case .textDelta(let text) = result.events[0] else {
+            Issue.record("Expected textDelta first")
+            return
+        }
+        #expect(text == "checking...")
+        guard case .toolUse(_, let name, _) = result.events[1] else {
+            Issue.record("Expected toolUse second")
+            return
+        }
+        #expect(name == "Bash")
+    }
+
+    @Test func toolUseInputSerialization() {
+        let json = """
+        {"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu-3","name":"Edit","input":{"file":"a.txt","line":42}}]}}
+        """
+        let result = ClaudeProcess.parseStreamLine(json)
+        guard case .toolUse(_, _, let input) = result.events.first else {
+            Issue.record("Expected toolUse")
+            return
+        }
+        // Verify input is valid JSON
+        let data = input.data(using: .utf8)!
+        let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        #expect(parsed != nil)
+        #expect(parsed?["file"] as? String == "a.txt")
+        #expect(parsed?["line"] as? Int == 42)
+    }
+
+    @Test func toolResultWithStringContent() {
+        let json = """
+        {"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu-4","content":"plain text result"}]}}
+        """
+        let result = ClaudeProcess.parseStreamLine(json)
+        #expect(result.events.count == 1)
+        guard case .toolResult(_, let content) = result.events.first else {
+            Issue.record("Expected toolResult")
+            return
+        }
+        #expect(content == "plain text result")
+    }
 }

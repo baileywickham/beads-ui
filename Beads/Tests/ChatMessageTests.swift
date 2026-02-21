@@ -28,4 +28,22 @@ struct ChatMessageTests {
         msg.text += "streamed"
         #expect(msg.text == "streamed")
     }
+
+    // MARK: - Tool calls
+
+    @Test func toolCallsDefaultEmpty() {
+        let msg = ChatMessage(role: .assistant, text: "hi")
+        #expect(msg.toolCalls.isEmpty)
+    }
+
+    @Test func toolCallMutation() {
+        var msg = ChatMessage(role: .assistant, text: "")
+        msg.toolCalls.append(ChatMessage.ToolCall(id: "t1", name: "Read", input: "{}"))
+        #expect(msg.toolCalls.count == 1)
+        #expect(msg.toolCalls[0].name == "Read")
+        #expect(msg.toolCalls[0].result == nil)
+
+        msg.toolCalls[0].result = "file contents"
+        #expect(msg.toolCalls[0].result == "file contents")
+    }
 }

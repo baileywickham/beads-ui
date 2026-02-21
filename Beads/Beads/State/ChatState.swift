@@ -48,6 +48,17 @@ final class ChatState {
                         }
                     case .sessionId(let sid):
                         sessionId = sid
+                    case .toolUse(let id, let name, let input):
+                        if assistantIndex < messages.count {
+                            messages[assistantIndex].toolCalls.append(
+                                ChatMessage.ToolCall(id: id, name: name, input: input)
+                            )
+                        }
+                    case .toolResult(let toolUseId, let content):
+                        if assistantIndex < messages.count,
+                           let idx = messages[assistantIndex].toolCalls.firstIndex(where: { $0.id == toolUseId }) {
+                            messages[assistantIndex].toolCalls[idx].result = content
+                        }
                     case .completed:
                         break
                     }
@@ -56,8 +67,10 @@ final class ChatState {
                 // User cancelled
             } catch {
                 errorMessage = error.localizedDescription
-                // Remove empty assistant message on error
-                if assistantIndex < messages.count && messages[assistantIndex].text.isEmpty {
+                // Remove assistant message if it has no visible content
+                if assistantIndex < messages.count
+                    && messages[assistantIndex].text.isEmpty
+                    && messages[assistantIndex].toolCalls.isEmpty {
                     messages.remove(at: assistantIndex)
                 }
             }

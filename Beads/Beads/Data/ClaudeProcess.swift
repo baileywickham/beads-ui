@@ -1,8 +1,10 @@
 import Foundation
 
-enum ClaudeStreamEvent {
+enum ClaudeStreamEvent: Equatable {
     case textDelta(String)
     case sessionId(String)
+    case toolUse(id: String, name: String, input: String)
+    case toolResult(toolUseId: String, content: String)
     case completed
 }
 
@@ -34,6 +36,38 @@ enum ClaudeProcess {
                 for block in content {
                     if let text = block["text"] as? String {
                         events.append(.textDelta(text))
+                    }
+                    if block["type"] as? String == "tool_use",
+                       let toolId = block["id"] as? String,
+                       let name = block["name"] as? String {
+                        let input: String
+                        if let inputDict = block["input"] as? [String: Any],
+                           let jsonData = try? JSONSerialization.data(withJSONObject: inputDict),
+                           let jsonStr = String(data: jsonData, encoding: .utf8) {
+                            input = jsonStr
+                        } else {
+                            input = "{}"
+                        }
+                        events.append(.toolUse(id: toolId, name: name, input: input))
+                    }
+                }
+            }
+
+            if type == "user",
+               let message = obj["message"] as? [String: Any],
+               let content = message["content"] as? [[String: Any]] {
+                for block in content {
+                    if block["type"] as? String == "tool_result",
+                       let toolUseId = block["tool_use_id"] as? String {
+                        let resultContent: String
+                        if let contentArr = block["content"] as? [[String: Any]] {
+                            resultContent = contentArr.compactMap { $0["text"] as? String }.joined(separator: "\n")
+                        } else if let text = block["content"] as? String {
+                            resultContent = text
+                        } else {
+                            resultContent = ""
+                        }
+                        events.append(.toolResult(toolUseId: toolUseId, content: resultContent))
                     }
                 }
             }
