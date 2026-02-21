@@ -108,7 +108,7 @@ struct IssueDetailView: View {
                         }
                     )
                 case .chat:
-                    ChatView(chatState: state.chatState(for: issue.id))
+                    ChatView(chatState: state.chatState(for: issue.id), issue: issue)
                         .frame(minHeight: 300)
                 }
             }

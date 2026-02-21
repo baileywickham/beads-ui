@@ -111,7 +111,7 @@ enum ClaudeProcess {
                 process.executableURL = URL(fileURLWithPath: claudePath)
                 process.currentDirectoryURL = URL(fileURLWithPath: projectPath)
 
-                var args = ["-p", prompt, "--output-format", "stream-json", "--verbose"]
+                var args = ["-p", prompt, "--output-format", "stream-json", "--verbose", "--include-partial-messages"]
                 if let sessionId {
                     args += ["--resume", sessionId]
                 }

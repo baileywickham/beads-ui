@@ -84,4 +84,11 @@ final class ChatState {
         streamTask = nil
         isStreaming = false
     }
+
+    func clear() {
+        cancel()
+        messages.removeAll()
+        sessionId = nil
+        errorMessage = nil
+    }
 }

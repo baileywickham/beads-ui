@@ -2,12 +2,50 @@ import SwiftUI
 
 struct ChatView: View {
     var chatState: ChatState
+    var issue: Issue
 
     @State private var inputText = ""
     @FocusState private var isInputFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
+            // Issue context header
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(issue.id)
+                            .font(.caption)
+                            .monospaced()
+                            .foregroundStyle(.secondary)
+                        Text(issue.title)
+                            .font(.callout)
+                            .fontWeight(.medium)
+                            .lineLimit(1)
+                    }
+                    if !issue.description.isEmpty {
+                        Text(issue.description)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                }
+                Spacer()
+                if !chatState.messages.isEmpty {
+                    Button {
+                        chatState.clear()
+                    } label: {
+                        Image(systemName: "trash")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Clear chat")
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+
+            Divider()
+
             // Messages
             ScrollViewReader { proxy in
                 ScrollView {
