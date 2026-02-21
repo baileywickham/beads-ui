@@ -118,6 +118,7 @@ struct IssueDetailView: View {
                 }
             case .chat:
                 ChatView(chatState: state.chatState(for: issue), issue: issue)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .frame(minWidth: 400)

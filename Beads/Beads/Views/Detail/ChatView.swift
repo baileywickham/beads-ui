@@ -57,26 +57,15 @@ struct ChatView: View {
                     }
                     .padding(12)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .onChange(of: chatState.messages.last?.text) {
-                    if let last = chatState.messages.last {
-                        withAnimation(.easeOut(duration: 0.15)) {
-                            proxy.scrollTo(last.id, anchor: .bottom)
-                        }
-                    }
+                    scrollToBottom(proxy)
                 }
                 .onChange(of: chatState.messages.count) {
-                    if let last = chatState.messages.last {
-                        withAnimation(.easeOut(duration: 0.15)) {
-                            proxy.scrollTo(last.id, anchor: .bottom)
-                        }
-                    }
+                    scrollToBottom(proxy)
                 }
                 .onChange(of: chatState.messages.last?.toolCalls.count) {
-                    if let last = chatState.messages.last {
-                        withAnimation(.easeOut(duration: 0.15)) {
-                            proxy.scrollTo(last.id, anchor: .bottom)
-                        }
-                    }
+                    scrollToBottom(proxy)
                 }
             }
 
@@ -149,60 +138,92 @@ struct ChatView: View {
         }
     }
 
+    private func scrollToBottom(_ proxy: ScrollViewProxy) {
+        if let last = chatState.messages.last {
+            withAnimation(.easeOut(duration: 0.15)) {
+                proxy.scrollTo(last.id, anchor: .bottom)
+            }
+        }
+    }
+
     private func send() {
         let text = inputText
         inputText = ""
         chatState.sendMessage(text)
     }
 
+    // MARK: - Tool call view
+
     private struct ToolCallView: View {
         let toolCall: ChatMessage.ToolCall
+        let isStreaming: Bool
         @State private var isExpanded = false
 
+        private var isRunning: Bool {
+            isStreaming && toolCall.result == nil
+        }
+
         var body: some View {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 0) {
                 Button {
                     withAnimation(.easeInOut(duration: 0.15)) {
                         isExpanded.toggle()
                     }
                 } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "wrench.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                    HStack(spacing: 6) {
+                        // Status indicator
+                        if isRunning {
+                            ProgressView()
+                                .controlSize(.mini)
+                        } else {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.green)
+                        }
+
                         Text(toolCall.name)
-                            .font(.caption)
+                            .font(.system(.caption, design: .monospaced))
                             .fontWeight(.medium)
-                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
+                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
                     }
                     .foregroundStyle(.secondary)
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 8)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
 
                 if isExpanded {
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 6) {
                         Text(toolCall.input)
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(5)
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(8)
 
                         if let result = toolCall.result {
                             Divider()
                             Text(result)
-                                .font(.system(.caption, design: .monospaced))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(10)
+                                .font(.system(.caption2, design: .monospaced))
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(12)
                         }
                     }
-                    .padding(6)
-                    .background(.quaternary.opacity(0.3))
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 6)
                 }
             }
+            .background(.fill.quinary)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
         }
     }
+
+    // MARK: - Message bubbles
 
     @ViewBuilder
     private func messageBubble(_ message: ChatMessage) -> some View {
@@ -211,6 +232,7 @@ struct ChatView: View {
             HStack {
                 Spacer(minLength: 60)
                 Text(message.text)
+                    .font(.callout)
                     .padding(10)
                     .background(Color.accentColor.opacity(0.15))
                     .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -222,19 +244,17 @@ struct ChatView: View {
                         .controlSize(.small)
                         .padding(10)
                 } else {
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: 8) {
                         if !message.text.isEmpty {
-                            if chatState.isStreaming && message.id == chatState.messages.last?.id {
-                                Text(message.text)
-                                    .font(.callout)
-                                    .textSelection(.enabled)
-                            } else {
-                                MarkdownView(content: message.text)
-                                    .font(.callout)
-                            }
+                            Text(message.text)
+                                .font(.callout)
+                                .textSelection(.enabled)
                         }
                         ForEach(message.toolCalls) { toolCall in
-                            ToolCallView(toolCall: toolCall)
+                            ToolCallView(
+                                toolCall: toolCall,
+                                isStreaming: chatState.isStreaming && message.id == chatState.messages.last?.id
+                            )
                         }
                     }
                     .padding(10)
