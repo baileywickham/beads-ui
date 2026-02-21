@@ -3,6 +3,7 @@ import Foundation
 @MainActor @Observable
 final class ChatState {
     let projectPath: String
+    var issueContext: String?
 
     var messages: [ChatMessage] = []
     var isStreaming: Bool = false
@@ -33,10 +34,18 @@ final class ChatState {
         let projectPath = self.projectPath
         let provider = streamProvider
 
+        // Prepend issue context on first message in session
+        let prompt: String
+        if currentSessionId == nil, let context = issueContext {
+            prompt = context + "\n\n" + trimmed
+        } else {
+            prompt = trimmed
+        }
+
         streamTask = Task {
             do {
                 let stream = provider(
-                    trimmed,
+                    prompt,
                     currentSessionId,
                     projectPath
                 )

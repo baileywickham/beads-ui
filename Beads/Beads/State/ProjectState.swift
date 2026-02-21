@@ -20,10 +20,16 @@ final class ProjectState {
     private var lastLaunchTime: ContinuousClock.Instant = .now - .seconds(10)
     private var chatStates: [String: ChatState] = [:]
 
-    func chatState(for issueId: String) -> ChatState {
-        if let existing = chatStates[issueId] { return existing }
+    func chatState(for issue: Issue) -> ChatState {
+        if let existing = chatStates[issue.id] { return existing }
         let state = ChatState(projectPath: project.path)
-        chatStates[issueId] = state
+        var context = "Issue \(issue.id): \(issue.title)"
+        if !issue.description.isEmpty { context += "\nDescription: \(issue.description)" }
+        if !issue.design.isEmpty { context += "\nDesign: \(issue.design)" }
+        if !issue.acceptanceCriteria.isEmpty { context += "\nAcceptance Criteria: \(issue.acceptanceCriteria)" }
+        if !issue.notes.isEmpty { context += "\nNotes: \(issue.notes)" }
+        state.issueContext = context
+        chatStates[issue.id] = state
         return state
     }
 

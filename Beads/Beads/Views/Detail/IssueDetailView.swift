@@ -16,103 +16,108 @@ struct IssueDetailView: View {
     @State private var selectedTab: DetailTab = .comments
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                // Header
-                header
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    // Header
+                    header
 
-                // Metadata
-                GroupBox {
-                    IssueMetadataView(
-                        issue: issue,
-                        onStatusChange: { status in
-                            state.updateStatus(issue.id, to: status)
-                        },
-                        onPriorityChange: { priority in
-                            state.updatePriority(issue.id, to: priority)
-                        }
-                    )
-                    .padding(4)
-                }
-
-                // Description
-                IssueMarkdownSection(
-                    title: "Description",
-                    content: issue.description,
-                    onSave: { text in
-                        state.updateField(issue.id, field: "description", value: text)
-                    }
-                )
-
-                // Design
-                if !issue.design.isEmpty {
-                    IssueMarkdownSection(
-                        title: "Design",
-                        content: issue.design,
-                        onSave: { text in
-                            state.updateField(issue.id, field: "design", value: text)
-                        }
-                    )
-                }
-
-                // Acceptance Criteria
-                if !issue.acceptanceCriteria.isEmpty {
-                    IssueMarkdownSection(
-                        title: "Acceptance Criteria",
-                        content: issue.acceptanceCriteria,
-                        onSave: { text in
-                            state.updateField(issue.id, field: "acceptance", value: text)
-                        }
-                    )
-                }
-
-                // Notes
-                if !issue.notes.isEmpty {
-                    IssueMarkdownSection(
-                        title: "Notes",
-                        content: issue.notes,
-                        onSave: { text in
-                            state.updateField(issue.id, field: "notes", value: text)
-                        }
-                    )
-                }
-
-                // Dependencies
-                if !issue.dependencies.isEmpty {
+                    // Metadata
                     GroupBox {
-                        IssueDependenciesView(
-                            dependencies: issue.dependencies,
-                            onSelect: { id in
-                                state.loadIssueDetail(id: id)
-                                state.selectedIssueId = id
+                        IssueMetadataView(
+                            issue: issue,
+                            onStatusChange: { status in
+                                state.updateStatus(issue.id, to: status)
+                            },
+                            onPriorityChange: { priority in
+                                state.updatePriority(issue.id, to: priority)
                             }
                         )
                         .padding(4)
                     }
-                }
 
-                // Tab bar: Comments | Chat
-                HStack(spacing: 0) {
-                    tabButton("Comments", tab: .comments)
-                    tabButton("Chat", tab: .chat)
-                    Spacer()
-                }
-
-                // Tab content
-                switch selectedTab {
-                case .comments:
-                    IssueCommentsView(
-                        comments: issue.comments,
-                        onAdd: { text in
-                            state.addComment(issue.id, text: text)
+                    // Description
+                    IssueMarkdownSection(
+                        title: "Description",
+                        content: issue.description,
+                        onSave: { text in
+                            state.updateField(issue.id, field: "description", value: text)
                         }
                     )
-                case .chat:
-                    ChatView(chatState: state.chatState(for: issue.id), issue: issue)
-                        .frame(minHeight: 300)
+
+                    // Design
+                    if !issue.design.isEmpty {
+                        IssueMarkdownSection(
+                            title: "Design",
+                            content: issue.design,
+                            onSave: { text in
+                                state.updateField(issue.id, field: "design", value: text)
+                            }
+                        )
+                    }
+
+                    // Acceptance Criteria
+                    if !issue.acceptanceCriteria.isEmpty {
+                        IssueMarkdownSection(
+                            title: "Acceptance Criteria",
+                            content: issue.acceptanceCriteria,
+                            onSave: { text in
+                                state.updateField(issue.id, field: "acceptance", value: text)
+                            }
+                        )
+                    }
+
+                    // Notes
+                    if !issue.notes.isEmpty {
+                        IssueMarkdownSection(
+                            title: "Notes",
+                            content: issue.notes,
+                            onSave: { text in
+                                state.updateField(issue.id, field: "notes", value: text)
+                            }
+                        )
+                    }
+
+                    // Dependencies
+                    if !issue.dependencies.isEmpty {
+                        GroupBox {
+                            IssueDependenciesView(
+                                dependencies: issue.dependencies,
+                                onSelect: { id in
+                                    state.loadIssueDetail(id: id)
+                                    state.selectedIssueId = id
+                                }
+                            )
+                            .padding(4)
+                        }
+                    }
+
+                    // Tab bar: Comments | Chat
+                    HStack(spacing: 0) {
+                        tabButton("Comments", tab: .comments)
+                        tabButton("Chat", tab: .chat)
+                        Spacer()
+                    }
+
+                    // Comments tab content (inside scroll)
+                    if selectedTab == .comments {
+                        IssueCommentsView(
+                            comments: issue.comments,
+                            onAdd: { text in
+                                state.addComment(issue.id, text: text)
+                            }
+                        )
+                    }
                 }
+                .padding(20)
             }
-            .padding(20)
+
+            // Chat tab content (outside scroll, pinned to bottom)
+            if selectedTab == .chat {
+                Divider()
+                ChatView(chatState: state.chatState(for: issue), issue: issue)
+                    .frame(minHeight: 300)
+            }
         }
         .frame(minWidth: 400)
         .toolbar {
