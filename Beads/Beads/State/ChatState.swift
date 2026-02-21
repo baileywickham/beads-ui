@@ -58,14 +58,16 @@ final class ChatState {
                     case .sessionId(let sid):
                         sessionId = sid
                     case .toolUse(let id, let name, let input):
-                        if assistantIndex < messages.count {
+                        if assistantIndex < messages.count,
+                           !messages[assistantIndex].toolCalls.contains(where: { $0.id == id }) {
                             messages[assistantIndex].toolCalls.append(
                                 ChatMessage.ToolCall(id: id, name: name, input: input)
                             )
                         }
                     case .toolResult(let toolUseId, let content):
                         if assistantIndex < messages.count,
-                           let idx = messages[assistantIndex].toolCalls.firstIndex(where: { $0.id == toolUseId }) {
+                           let idx = messages[assistantIndex].toolCalls.firstIndex(where: { $0.id == toolUseId }),
+                           messages[assistantIndex].toolCalls[idx].result == nil {
                             messages[assistantIndex].toolCalls[idx].result = content
                         }
                     case .completed:

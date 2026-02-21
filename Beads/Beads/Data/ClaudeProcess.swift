@@ -30,13 +30,12 @@ enum ClaudeProcess {
                 events.append(.textDelta(text))
             }
 
+            // assistant partial messages contain the full accumulated content.
+            // Text is already covered by content_block_delta — only extract tool_use blocks.
             if type == "assistant",
                let message = obj["message"] as? [String: Any],
                let content = message["content"] as? [[String: Any]] {
                 for block in content {
-                    if let text = block["text"] as? String {
-                        events.append(.textDelta(text))
-                    }
                     if block["type"] as? String == "tool_use",
                        let toolId = block["id"] as? String,
                        let name = block["name"] as? String {

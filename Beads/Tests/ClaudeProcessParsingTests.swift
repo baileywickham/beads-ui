@@ -21,19 +21,13 @@ struct ClaudeProcessParsingTests {
         #expect(result.sessionId == nil)
     }
 
-    @Test func assistantMessageYieldsTextDeltas() {
+    @Test func assistantMessageIgnoresTextBlocks() {
+        // assistant partial messages contain full accumulated text — we get text from content_block_delta instead
         let json = """
         {"type":"assistant","message":{"content":[{"text":"first"},{"text":"second"}]}}
         """
         let result = ClaudeProcess.parseStreamLine(json)
-        #expect(result.events.count == 2)
-        guard case .textDelta(let t1) = result.events[0],
-              case .textDelta(let t2) = result.events[1] else {
-            Issue.record("Expected two textDeltas")
-            return
-        }
-        #expect(t1 == "first")
-        #expect(t2 == "second")
+        #expect(result.events.isEmpty)
     }
 
     @Test func sessionIdCapturedFromTopLevel() {
@@ -65,18 +59,13 @@ struct ClaudeProcessParsingTests {
         #expect(result.sessionId == nil)
     }
 
-    @Test func assistantWithSessionId() {
+    @Test func assistantWithSessionIdIgnoresText() {
         let json = """
         {"type":"assistant","session_id":"sess-multi","message":{"content":[{"text":"chunk"}]}}
         """
         let result = ClaudeProcess.parseStreamLine(json)
         #expect(result.sessionId == "sess-multi")
-        #expect(result.events.count == 1)
-        guard case .textDelta(let text) = result.events.first else {
-            Issue.record("Expected textDelta")
-            return
-        }
-        #expect(text == "chunk")
+        #expect(result.events.isEmpty)
     }
 
     @Test func contentBlockDeltaWithMissingTextField() {
@@ -168,19 +157,15 @@ struct ClaudeProcessParsingTests {
         #expect(content == "file contents")
     }
 
-    @Test func mixedTextAndToolUse() {
+    @Test func mixedTextAndToolUseOnlyEmitsToolUse() {
+        // Text blocks in assistant messages are ignored; only tool_use is extracted
         let json = """
         {"type":"assistant","message":{"content":[{"text":"checking..."},{"type":"tool_use","id":"tu-2","name":"Bash","input":{"command":"ls"}}]}}
         """
         let result = ClaudeProcess.parseStreamLine(json)
-        #expect(result.events.count == 2)
-        guard case .textDelta(let text) = result.events[0] else {
-            Issue.record("Expected textDelta first")
-            return
-        }
-        #expect(text == "checking...")
-        guard case .toolUse(_, let name, _) = result.events[1] else {
-            Issue.record("Expected toolUse second")
+        #expect(result.events.count == 1)
+        guard case .toolUse(_, let name, _) = result.events[0] else {
+            Issue.record("Expected toolUse")
             return
         }
         #expect(name == "Bash")

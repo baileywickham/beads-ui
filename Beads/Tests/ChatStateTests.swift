@@ -570,4 +570,64 @@ struct ChatStateTests {
         #expect(getPrompt1()!.hasPrefix("Issue A"))
         #expect(getPrompt2()!.hasPrefix("Issue B"))
     }
+
+    // MARK: - Tool call deduplication
+
+    @MainActor
+    @Test func duplicateToolUseIdsAreIgnored() async {
+        let state = ChatState(projectPath: "/tmp")
+        state.streamProvider = Self.mockProvider(events: [
+            .toolUse(id: "t1", name: "Bash", input: "{\"cmd\":\"ls\"}"),
+            .toolUse(id: "t1", name: "Bash", input: "{\"cmd\":\"ls\"}"),
+            .toolUse(id: "t1", name: "Bash", input: "{\"cmd\":\"ls\"}"),
+            .textDelta("done"),
+            .completed,
+        ])
+        state.sendMessage("ls")
+        while state.isStreaming { await Task.yield() }
+
+        #expect(state.messages[1].toolCalls.count == 1)
+        #expect(state.messages[1].toolCalls[0].id == "t1")
+    }
+
+    @MainActor
+    @Test func duplicateToolResultsAreIgnored() async {
+        let state = ChatState(projectPath: "/tmp")
+        state.streamProvider = Self.mockProvider(events: [
+            .toolUse(id: "t1", name: "Bash", input: "{}"),
+            .toolResult(toolUseId: "t1", content: "first result"),
+            .toolResult(toolUseId: "t1", content: "duplicate result"),
+            .completed,
+        ])
+        state.sendMessage("go")
+        while state.isStreaming { await Task.yield() }
+
+        #expect(state.messages[1].toolCalls[0].result == "first result")
+    }
+
+    @MainActor
+    @Test func multipleDistinctToolCallsWithDuplicates() async {
+        // Simulates partial messages repeating tool_use blocks
+        let state = ChatState(projectPath: "/tmp")
+        state.streamProvider = Self.mockProvider(events: [
+            .toolUse(id: "t1", name: "Read", input: "{}"),
+            .toolUse(id: "t1", name: "Read", input: "{}"),
+            .toolResult(toolUseId: "t1", content: "file contents"),
+            .toolUse(id: "t2", name: "Bash", input: "{\"cmd\":\"ls\"}"),
+            .toolUse(id: "t1", name: "Read", input: "{}"),
+            .toolUse(id: "t2", name: "Bash", input: "{\"cmd\":\"ls\"}"),
+            .toolResult(toolUseId: "t2", content: "file.txt"),
+            .textDelta("done"),
+            .completed,
+        ])
+        state.sendMessage("do two things")
+        while state.isStreaming { await Task.yield() }
+
+        #expect(state.messages[1].toolCalls.count == 2)
+        #expect(state.messages[1].toolCalls[0].id == "t1")
+        #expect(state.messages[1].toolCalls[0].result == "file contents")
+        #expect(state.messages[1].toolCalls[1].id == "t2")
+        #expect(state.messages[1].toolCalls[1].result == "file.txt")
+        #expect(state.messages[1].text == "done")
+    }
 }
