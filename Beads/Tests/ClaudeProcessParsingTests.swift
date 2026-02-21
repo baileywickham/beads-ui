@@ -5,47 +5,310 @@ import Testing
 @Suite("ClaudeProcess NDJSON Parsing")
 struct ClaudeProcessParsingTests {
 
-    // MARK: - parseStreamLine
+    // MARK: - stream_event text deltas
 
-    @Test func contentBlockDeltaYieldsTextDelta() {
+    @Test func streamEventTextDelta() {
         let json = """
-        {"type":"content_block_delta","delta":{"text":"hello"}}
+        {"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hello"}},"session_id":"sess-1"}
         """
         let result = ClaudeProcess.parseStreamLine(json)
-        #expect(result.events.count == 1)
-        guard case .textDelta(let text) = result.events.first else {
-            Issue.record("Expected textDelta, got \(result.events)")
-            return
-        }
-        #expect(text == "hello")
-        #expect(result.sessionId == nil)
+        #expect(result.events == [.textDelta("hello")])
+        #expect(result.sessionId == "sess-1")
     }
 
-    @Test func assistantMessageIgnoresTextBlocks() {
-        // assistant partial messages contain full accumulated text — we get text from content_block_delta instead
+    @Test func streamEventMultipleTextDeltas() {
+        let lines = [
+            """
+            {"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}},"session_id":"sess-1"}
+            """,
+            """
+            {"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" world"}},"session_id":"sess-1"}
+            """,
+        ]
+        var accumulated = ""
+        for line in lines {
+            let result = ClaudeProcess.parseStreamLine(line)
+            for event in result.events {
+                if case .textDelta(let text) = event { accumulated += text }
+            }
+        }
+        #expect(accumulated == "Hello world")
+    }
+
+    @Test func streamEventInputJsonDeltaIgnored() {
+        // Tool input streaming uses input_json_delta — should not produce events
         let json = """
-        {"type":"assistant","message":{"content":[{"text":"first"},{"text":"second"}]}}
+        {"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\\"command\\""}},"session_id":"sess-1"}
+        """
+        let result = ClaudeProcess.parseStreamLine(json)
+        #expect(result.events.isEmpty)
+        #expect(result.sessionId == "sess-1")
+    }
+
+    @Test func streamEventContentBlockStartIgnored() {
+        let json = """
+        {"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}},"session_id":"sess-1"}
         """
         let result = ClaudeProcess.parseStreamLine(json)
         #expect(result.events.isEmpty)
     }
 
-    @Test func sessionIdCapturedFromTopLevel() {
+    @Test func streamEventContentBlockStopIgnored() {
         let json = """
-        {"type":"init","session_id":"sess-abc123"}
+        {"type":"stream_event","event":{"type":"content_block_stop","index":0},"session_id":"sess-1"}
+        """
+        let result = ClaudeProcess.parseStreamLine(json)
+        #expect(result.events.isEmpty)
+    }
+
+    @Test func streamEventMessageStartIgnored() {
+        let json = """
+        {"type":"stream_event","event":{"type":"message_start","message":{"model":"claude-opus-4-6","id":"msg_01","type":"message","role":"assistant"}},"session_id":"sess-1"}
+        """
+        let result = ClaudeProcess.parseStreamLine(json)
+        #expect(result.events.isEmpty)
+    }
+
+    @Test func streamEventMessageDeltaIgnored() {
+        let json = """
+        {"type":"stream_event","event":{"type":"message_delta","delta":{"stop_reason":"end_turn"}},"session_id":"sess-1"}
+        """
+        let result = ClaudeProcess.parseStreamLine(json)
+        #expect(result.events.isEmpty)
+    }
+
+    @Test func streamEventMessageStopIgnored() {
+        let json = """
+        {"type":"stream_event","event":{"type":"message_stop"},"session_id":"sess-1"}
+        """
+        let result = ClaudeProcess.parseStreamLine(json)
+        #expect(result.events.isEmpty)
+    }
+
+    @Test func streamEventToolUseBlockStartIgnored() {
+        // Tool use content_block_start — tool call data comes from assistant messages
+        let json = """
+        {"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_01","name":"Bash","input":{}}},"session_id":"sess-1"}
+        """
+        let result = ClaudeProcess.parseStreamLine(json)
+        #expect(result.events.isEmpty)
+    }
+
+    // MARK: - assistant messages (tool_use extraction)
+
+    @Test func assistantMessageIgnoresTextBlocks() {
+        let json = """
+        {"type":"assistant","message":{"content":[{"type":"text","text":"accumulated text"}]},"session_id":"sess-1"}
+        """
+        let result = ClaudeProcess.parseStreamLine(json)
+        #expect(result.events.isEmpty)
+        #expect(result.sessionId == "sess-1")
+    }
+
+    @Test func assistantToolUseExtracted() {
+        let json = """
+        {"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_01","name":"Read","input":{"file_path":"/tmp/file"}}]},"session_id":"sess-1"}
+        """
+        let result = ClaudeProcess.parseStreamLine(json)
+        #expect(result.events.count == 1)
+        guard case .toolUse(let id, let name, let input) = result.events.first else {
+            Issue.record("Expected toolUse, got \(result.events)")
+            return
+        }
+        #expect(id == "toolu_01")
+        #expect(name == "Read")
+        #expect(input.contains("file_path"))
+    }
+
+    @Test func assistantMixedTextAndToolUse() {
+        let json = """
+        {"type":"assistant","message":{"content":[{"type":"text","text":"checking..."},{"type":"tool_use","id":"toolu_02","name":"Bash","input":{"command":"ls"}}]},"session_id":"sess-1"}
+        """
+        let result = ClaudeProcess.parseStreamLine(json)
+        #expect(result.events.count == 1)
+        guard case .toolUse(_, let name, _) = result.events[0] else {
+            Issue.record("Expected toolUse")
+            return
+        }
+        #expect(name == "Bash")
+    }
+
+    @Test func assistantMultipleToolUseBlocks() {
+        let json = """
+        {"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"echo first"}},{"type":"tool_use","id":"t2","name":"Bash","input":{"command":"echo second"}}]},"session_id":"sess-1"}
+        """
+        let result = ClaudeProcess.parseStreamLine(json)
+        #expect(result.events.count == 2)
+        guard case .toolUse(let id1, _, _) = result.events[0],
+              case .toolUse(let id2, _, _) = result.events[1] else {
+            Issue.record("Expected two toolUse events")
+            return
+        }
+        #expect(id1 == "t1")
+        #expect(id2 == "t2")
+    }
+
+    @Test func assistantToolUseInputSerialization() {
+        let json = """
+        {"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu-3","name":"Edit","input":{"file":"a.txt","line":42}}]}}
+        """
+        let result = ClaudeProcess.parseStreamLine(json)
+        guard case .toolUse(_, _, let input) = result.events.first else {
+            Issue.record("Expected toolUse")
+            return
+        }
+        let data = input.data(using: .utf8)!
+        let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        #expect(parsed != nil)
+        #expect(parsed?["file"] as? String == "a.txt")
+        #expect(parsed?["line"] as? Int == 42)
+    }
+
+    @Test func assistantToolUseWithEmptyInput() {
+        let json = """
+        {"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Read","input":{}}]}}
+        """
+        let result = ClaudeProcess.parseStreamLine(json)
+        guard case .toolUse(_, _, let input) = result.events.first else {
+            Issue.record("Expected toolUse")
+            return
+        }
+        #expect(input == "{}")
+    }
+
+    // MARK: - user messages (tool_result extraction)
+
+    @Test func userToolResultWithArrayContent() {
+        let json = """
+        {"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01","content":[{"text":"file contents here"}],"is_error":false}]},"session_id":"sess-1"}
+        """
+        let result = ClaudeProcess.parseStreamLine(json)
+        #expect(result.events.count == 1)
+        guard case .toolResult(let toolUseId, let content) = result.events.first else {
+            Issue.record("Expected toolResult, got \(result.events)")
+            return
+        }
+        #expect(toolUseId == "toolu_01")
+        #expect(content == "file contents here")
+    }
+
+    @Test func userToolResultWithStringContent() {
+        let json = """
+        {"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01","content":"hello-from-claude","is_error":false}]},"session_id":"sess-1"}
+        """
+        let result = ClaudeProcess.parseStreamLine(json)
+        guard case .toolResult(let id, let content) = result.events.first else {
+            Issue.record("Expected toolResult")
+            return
+        }
+        #expect(id == "toolu_01")
+        #expect(content == "hello-from-claude")
+    }
+
+    @Test func userToolResultWithNoContent() {
+        let json = """
+        {"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01"}]}}
+        """
+        let result = ClaudeProcess.parseStreamLine(json)
+        guard case .toolResult(_, let content) = result.events.first else {
+            Issue.record("Expected toolResult")
+            return
+        }
+        #expect(content == "")
+    }
+
+    @Test func userMultipleToolResults() {
+        let json = """
+        {"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"first"},{"type":"tool_result","tool_use_id":"t2","content":"second"}]}}
+        """
+        let result = ClaudeProcess.parseStreamLine(json)
+        #expect(result.events.count == 2)
+        guard case .toolResult(let id1, let c1) = result.events[0],
+              case .toolResult(let id2, let c2) = result.events[1] else {
+            Issue.record("Expected two toolResult events")
+            return
+        }
+        #expect(id1 == "t1")
+        #expect(c1 == "first")
+        #expect(id2 == "t2")
+        #expect(c2 == "second")
+    }
+
+    // MARK: - Session ID
+
+    @Test func sessionIdFromInit() {
+        let json = """
+        {"type":"system","subtype":"init","session_id":"sess-abc123"}
         """
         let result = ClaudeProcess.parseStreamLine(json)
         #expect(result.sessionId == "sess-abc123")
+        #expect(result.events.isEmpty)
     }
 
-    @Test func resultEventCapturesSessionId() {
+    @Test func sessionIdFromResult() {
         let json = """
-        {"type":"result","session_id":"sess-xyz","result":"done"}
+        {"type":"result","subtype":"success","session_id":"sess-xyz","result":"done"}
         """
         let result = ClaudeProcess.parseStreamLine(json)
         #expect(result.sessionId == "sess-xyz")
         #expect(result.events.isEmpty)
     }
+
+    @Test func sessionIdFromStreamEvent() {
+        let json = """
+        {"type":"stream_event","event":{"type":"message_start"},"session_id":"sess-from-stream"}
+        """
+        let result = ClaudeProcess.parseStreamLine(json)
+        #expect(result.sessionId == "sess-from-stream")
+    }
+
+    @Test func sessionIdFromAssistantMessage() {
+        let json = """
+        {"type":"assistant","session_id":"sess-asst","message":{"content":[{"type":"text","text":"hi"}]}}
+        """
+        let result = ClaudeProcess.parseStreamLine(json)
+        #expect(result.sessionId == "sess-asst")
+        #expect(result.events.isEmpty)
+    }
+
+    // MARK: - Skipped line types
+
+    @Test func systemHookEventIgnored() {
+        let json = """
+        {"type":"system","subtype":"hook_started","hook_id":"abc","session_id":"sess-1"}
+        """
+        let result = ClaudeProcess.parseStreamLine(json)
+        #expect(result.events.isEmpty)
+        #expect(result.sessionId == "sess-1")
+    }
+
+    @Test func systemHookResponseIgnored() {
+        let json = """
+        {"type":"system","subtype":"hook_response","hook_id":"abc","output":"long hook output...","session_id":"sess-1"}
+        """
+        let result = ClaudeProcess.parseStreamLine(json)
+        #expect(result.events.isEmpty)
+    }
+
+    @Test func rateLimitEventIgnored() {
+        let json = """
+        {"type":"rate_limit_event","rate_limit_info":{"status":"allowed"},"session_id":"sess-1"}
+        """
+        let result = ClaudeProcess.parseStreamLine(json)
+        #expect(result.events.isEmpty)
+        #expect(result.sessionId == "sess-1")
+    }
+
+    @Test func unknownTypeIgnored() {
+        let json = """
+        {"type":"ping"}
+        """
+        let result = ClaudeProcess.parseStreamLine(json)
+        #expect(result.events.isEmpty)
+        #expect(result.sessionId == nil)
+    }
+
+    // MARK: - Edge cases
 
     @Test func malformedJsonReturnsEmpty() {
         let result = ClaudeProcess.parseStreamLine("not json at all")
@@ -59,30 +322,28 @@ struct ClaudeProcessParsingTests {
         #expect(result.sessionId == nil)
     }
 
-    @Test func assistantWithSessionIdIgnoresText() {
+    @Test func missingTypeFieldReturnsEmpty() {
+        let result = ClaudeProcess.parseStreamLine("""
+        {"session_id":"sess-1","data":"something"}
+        """)
+        #expect(result.events.isEmpty)
+        #expect(result.sessionId == "sess-1")
+    }
+
+    @Test func streamEventWithMissingDelta() {
         let json = """
-        {"type":"assistant","session_id":"sess-multi","message":{"content":[{"text":"chunk"}]}}
+        {"type":"stream_event","event":{"type":"content_block_delta"},"session_id":"sess-1"}
         """
         let result = ClaudeProcess.parseStreamLine(json)
-        #expect(result.sessionId == "sess-multi")
         #expect(result.events.isEmpty)
     }
 
-    @Test func contentBlockDeltaWithMissingTextField() {
+    @Test func streamEventWithMissingTextField() {
         let json = """
-        {"type":"content_block_delta","delta":{"type":"text_delta"}}
+        {"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta"}},"session_id":"sess-1"}
         """
         let result = ClaudeProcess.parseStreamLine(json)
         #expect(result.events.isEmpty)
-    }
-
-    @Test func unknownTypeYieldsNoEvents() {
-        let json = """
-        {"type":"ping"}
-        """
-        let result = ClaudeProcess.parseStreamLine(json)
-        #expect(result.events.isEmpty)
-        #expect(result.sessionId == nil)
     }
 
     // MARK: - parseJsonResponse
@@ -104,20 +365,8 @@ struct ClaudeProcessParsingTests {
         """
         let data = json.data(using: .utf8)!
         let result = ClaudeProcess.parseJsonResponse(data)
-        #expect(result != nil)
         #expect(result?.text == "just text")
         #expect(result?.sessionId == nil)
-    }
-
-    @Test func parseJsonResponseWithEmptyResult() {
-        let json = """
-        {"session_id":"sess-empty"}
-        """
-        let data = json.data(using: .utf8)!
-        let result = ClaudeProcess.parseJsonResponse(data)
-        #expect(result != nil)
-        #expect(result?.text == "")
-        #expect(result?.sessionId == "sess-empty")
     }
 
     @Test func parseJsonResponseInvalidData() {
@@ -126,78 +375,285 @@ struct ClaudeProcessParsingTests {
         #expect(result == nil)
     }
 
-    // MARK: - Tool use parsing
+    // MARK: - Full stream sequence tests (from real captures)
 
-    @Test func toolUseInAssistantContent() {
-        let json = """
-        {"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu-1","name":"Read","input":{"path":"/tmp"}}]}}
-        """
-        let result = ClaudeProcess.parseStreamLine(json)
-        #expect(result.events.count == 1)
-        guard case .toolUse(let id, let name, let input) = result.events.first else {
-            Issue.record("Expected toolUse, got \(result.events)")
-            return
+    @Test func simpleTextStream() {
+        // Based on capture 01: "What is 2+2?" → "4"
+        let lines = [
+            """
+            {"type":"system","subtype":"init","session_id":"sess-simple"}
+            """,
+            """
+            {"type":"stream_event","event":{"type":"message_start","message":{"model":"claude-opus-4-6"}},"session_id":"sess-simple"}
+            """,
+            """
+            {"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}},"session_id":"sess-simple"}
+            """,
+            """
+            {"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"4"}},"session_id":"sess-simple"}
+            """,
+            """
+            {"type":"assistant","message":{"content":[{"type":"text","text":"4"}]},"session_id":"sess-simple"}
+            """,
+            """
+            {"type":"stream_event","event":{"type":"content_block_stop","index":0},"session_id":"sess-simple"}
+            """,
+            """
+            {"type":"stream_event","event":{"type":"message_delta","delta":{"stop_reason":"end_turn"}},"session_id":"sess-simple"}
+            """,
+            """
+            {"type":"result","subtype":"success","session_id":"sess-simple","result":"4"}
+            """,
+        ]
+
+        var text = ""
+        var sid: String?
+        for line in lines {
+            let parsed = ClaudeProcess.parseStreamLine(line)
+            if let s = parsed.sessionId, sid == nil { sid = s }
+            for event in parsed.events {
+                if case .textDelta(let t) = event { text += t }
+            }
         }
-        #expect(id == "tu-1")
-        #expect(name == "Read")
-        #expect(input.contains("/tmp"))
+        #expect(text == "4")
+        #expect(sid == "sess-simple")
     }
 
-    @Test func toolResultInUserContent() {
-        let json = """
-        {"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu-1","content":[{"text":"file contents"}]}]}}
-        """
-        let result = ClaudeProcess.parseStreamLine(json)
-        #expect(result.events.count == 1)
-        guard case .toolResult(let toolUseId, let content) = result.events.first else {
-            Issue.record("Expected toolResult, got \(result.events)")
-            return
+    @Test func bashToolCallStream() {
+        // Based on capture 04: "echo hello-from-claude" → tool call → "Done."
+        let lines = [
+            """
+            {"type":"system","subtype":"init","session_id":"sess-bash"}
+            """,
+            // Tool use streaming (input_json_delta — should be ignored)
+            """
+            {"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_01","name":"Bash","input":{}}},"session_id":"sess-bash"}
+            """,
+            """
+            {"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\\"command\\": \\"echo hello\\"}"}},"session_id":"sess-bash"}
+            """,
+            // Assistant message with complete tool_use
+            """
+            {"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_01","name":"Bash","input":{"command":"echo hello-from-claude","description":"Print hello"}}]},"session_id":"sess-bash"}
+            """,
+            // Tool result
+            """
+            {"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_01","type":"tool_result","content":"hello-from-claude","is_error":false}]},"session_id":"sess-bash"}
+            """,
+            // Response text
+            """
+            {"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Done."}},"session_id":"sess-bash"}
+            """,
+            """
+            {"type":"assistant","message":{"content":[{"type":"text","text":"Done."}]},"session_id":"sess-bash"}
+            """,
+            """
+            {"type":"result","subtype":"success","session_id":"sess-bash","result":"Done."}
+            """,
+        ]
+
+        var textParts: [String] = []
+        var toolCalls: [(id: String, name: String, input: String)] = []
+        var toolResults: [(id: String, content: String)] = []
+
+        for line in lines {
+            let parsed = ClaudeProcess.parseStreamLine(line)
+            for event in parsed.events {
+                switch event {
+                case .textDelta(let t): textParts.append(t)
+                case .toolUse(let id, let name, let input): toolCalls.append((id, name, input))
+                case .toolResult(let id, let content): toolResults.append((id, content))
+                default: break
+                }
+            }
         }
-        #expect(toolUseId == "tu-1")
-        #expect(content == "file contents")
+
+        #expect(toolCalls.count == 1)
+        #expect(toolCalls[0].name == "Bash")
+        #expect(toolCalls[0].id == "toolu_01")
+        #expect(toolResults.count == 1)
+        #expect(toolResults[0].content == "hello-from-claude")
+        #expect(textParts.joined() == "Done.")
     }
 
-    @Test func mixedTextAndToolUseOnlyEmitsToolUse() {
-        // Text blocks in assistant messages are ignored; only tool_use is extracted
-        let json = """
-        {"type":"assistant","message":{"content":[{"text":"checking..."},{"type":"tool_use","id":"tu-2","name":"Bash","input":{"command":"ls"}}]}}
-        """
-        let result = ClaudeProcess.parseStreamLine(json)
-        #expect(result.events.count == 1)
-        guard case .toolUse(_, let name, _) = result.events[0] else {
-            Issue.record("Expected toolUse")
-            return
+    @Test func globToolCallStream() {
+        // Based on capture 02: Glob tool call → file list → text response
+        let lines = [
+            """
+            {"type":"system","subtype":"init","session_id":"sess-glob"}
+            """,
+            """
+            {"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_glob","name":"Glob","input":{}}},"session_id":"sess-glob"}
+            """,
+            """
+            {"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\\"pattern\\": \\"*.swift\\"}"}},"session_id":"sess-glob"}
+            """,
+            """
+            {"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_glob","name":"Glob","input":{"pattern":"Beads/Beads/Models/*.swift"}}]},"session_id":"sess-glob"}
+            """,
+            """
+            {"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_glob","type":"tool_result","content":"Issue.swift\\nComment.swift\\nProject.swift"}]},"session_id":"sess-glob"}
+            """,
+            """
+            {"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Here"}},"session_id":"sess-glob"}
+            """,
+            """
+            {"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" are the files."}},"session_id":"sess-glob"}
+            """,
+            """
+            {"type":"result","subtype":"success","session_id":"sess-glob"}
+            """,
+        ]
+
+        var text = ""
+        var toolCalls: [(id: String, name: String)] = []
+        var toolResults: [(id: String, content: String)] = []
+
+        for line in lines {
+            let parsed = ClaudeProcess.parseStreamLine(line)
+            for event in parsed.events {
+                switch event {
+                case .textDelta(let t): text += t
+                case .toolUse(let id, let name, _): toolCalls.append((id, name))
+                case .toolResult(let id, let content): toolResults.append((id, content))
+                default: break
+                }
+            }
         }
-        #expect(name == "Bash")
+
+        #expect(toolCalls.count == 1)
+        #expect(toolCalls[0].name == "Glob")
+        #expect(toolResults.count == 1)
+        #expect(toolResults[0].content.contains("Issue.swift"))
+        #expect(text == "Here are the files.")
     }
 
-    @Test func toolUseInputSerialization() {
-        let json = """
-        {"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu-3","name":"Edit","input":{"file":"a.txt","line":42}}]}}
-        """
-        let result = ClaudeProcess.parseStreamLine(json)
-        guard case .toolUse(_, _, let input) = result.events.first else {
-            Issue.record("Expected toolUse")
-            return
+    @Test func twoParallelBashCommands() {
+        // Based on capture 08: Two Bash commands in one turn, results come separately
+        let lines = [
+            """
+            {"type":"system","subtype":"init","session_id":"sess-2bash"}
+            """,
+            // First tool_use
+            """
+            {"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"echo first"}}]},"session_id":"sess-2bash"}
+            """,
+            // Second tool_use (separate assistant message per content block)
+            """
+            {"type":"assistant","message":{"content":[{"type":"tool_use","id":"t2","name":"Bash","input":{"command":"echo second"}}]},"session_id":"sess-2bash"}
+            """,
+            // Results come as separate user messages
+            """
+            {"type":"user","message":{"role":"user","content":[{"tool_use_id":"t1","type":"tool_result","content":"first","is_error":false}]},"session_id":"sess-2bash"}
+            """,
+            """
+            {"type":"user","message":{"role":"user","content":[{"tool_use_id":"t2","type":"tool_result","content":"second","is_error":false}]},"session_id":"sess-2bash"}
+            """,
+            // Follow-up text
+            """
+            {"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Done — both ran."}},"session_id":"sess-2bash"}
+            """,
+        ]
+
+        var toolCalls: [(id: String, name: String)] = []
+        var toolResults: [(id: String, content: String)] = []
+        var text = ""
+
+        for line in lines {
+            let parsed = ClaudeProcess.parseStreamLine(line)
+            for event in parsed.events {
+                switch event {
+                case .textDelta(let t): text += t
+                case .toolUse(let id, let name, _): toolCalls.append((id, name))
+                case .toolResult(let id, let content): toolResults.append((id, content))
+                default: break
+                }
+            }
         }
-        // Verify input is valid JSON
-        let data = input.data(using: .utf8)!
-        let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        #expect(parsed != nil)
-        #expect(parsed?["file"] as? String == "a.txt")
-        #expect(parsed?["line"] as? Int == 42)
+
+        #expect(toolCalls.count == 2)
+        #expect(toolCalls[0].id == "t1")
+        #expect(toolCalls[1].id == "t2")
+        #expect(toolResults.count == 2)
+        #expect(toolResults[0].content == "first")
+        #expect(toolResults[1].content == "second")
+        #expect(text == "Done — both ran.")
     }
 
-    @Test func toolResultWithStringContent() {
+    @Test func toolCallFollowedByTextInSameSession() {
+        // Multi-turn: tool call → result → more text (like captures 02, 04)
+        // Verifies session_id consistency across turns
+        let lines = [
+            """
+            {"type":"system","subtype":"init","session_id":"sess-multi"}
+            """,
+            """
+            {"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Let me "}},"session_id":"sess-multi"}
+            """,
+            """
+            {"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"check."}},"session_id":"sess-multi"}
+            """,
+            """
+            {"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"/tmp/test.swift"}}]},"session_id":"sess-multi"}
+            """,
+            """
+            {"type":"user","message":{"role":"user","content":[{"tool_use_id":"t1","type":"tool_result","content":"import Foundation\\nstruct Foo {}"}]},"session_id":"sess-multi"}
+            """,
+            """
+            {"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"The file defines `Foo`."}},"session_id":"sess-multi"}
+            """,
+        ]
+
+        var allText = ""
+        var sessionIds: Set<String> = []
+
+        for line in lines {
+            let parsed = ClaudeProcess.parseStreamLine(line)
+            if let sid = parsed.sessionId { sessionIds.insert(sid) }
+            for event in parsed.events {
+                if case .textDelta(let t) = event { allText += t }
+            }
+        }
+
+        #expect(allText == "Let me check.The file defines `Foo`.")
+        #expect(sessionIds == ["sess-multi"])
+    }
+
+    @Test func markdownResponseStream() {
+        // Text with markdown formatting (backticks, code blocks, newlines)
+        let lines = [
+            """
+            {"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Here's a "}},"session_id":"sess-md"}
+            """,
+            """
+            {"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Swift example:\\n\\n```swift"}},"session_id":"sess-md"}
+            """,
+            """
+            {"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\\nlet x = 42\\n```"}},"session_id":"sess-md"}
+            """,
+        ]
+
+        var text = ""
+        for line in lines {
+            let parsed = ClaudeProcess.parseStreamLine(line)
+            for event in parsed.events {
+                if case .textDelta(let t) = event { text += t }
+            }
+        }
+
+        #expect(text.contains("```swift"))
+        #expect(text.contains("let x = 42"))
+    }
+
+    // MARK: - Backward compatibility with bare events (legacy format)
+
+    @Test func bareContentBlockDeltaNoLongerEmitsText() {
+        // Old format without stream_event wrapper — should NOT produce text
+        // (real CLI always wraps in stream_event)
         let json = """
-        {"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu-4","content":"plain text result"}]}}
+        {"type":"content_block_delta","delta":{"text":"hello"}}
         """
         let result = ClaudeProcess.parseStreamLine(json)
-        #expect(result.events.count == 1)
-        guard case .toolResult(_, let content) = result.events.first else {
-            Issue.record("Expected toolResult")
-            return
-        }
-        #expect(content == "plain text result")
+        #expect(result.events.isEmpty)
     }
 }

@@ -23,51 +23,60 @@ enum ClaudeProcess {
             sessionId = sid
         }
 
-        if let type = obj["type"] as? String {
-            if type == "content_block_delta",
-               let delta = obj["delta"] as? [String: Any],
+        guard let type = obj["type"] as? String else { return (events, sessionId) }
+
+        // Unwrap stream_event wrapper to get inner API streaming event.
+        // Real CLI format: {"type":"stream_event","event":{"type":"content_block_delta",...}}
+        if type == "stream_event",
+           let innerEvent = obj["event"] as? [String: Any],
+           let innerType = innerEvent["type"] as? String {
+            if innerType == "content_block_delta",
+               let delta = innerEvent["delta"] as? [String: Any],
+               delta["type"] as? String == "text_delta",
                let text = delta["text"] as? String {
                 events.append(.textDelta(text))
             }
+            return (events, sessionId)
+        }
 
-            // assistant partial messages contain the full accumulated content.
-            // Text is already covered by content_block_delta — only extract tool_use blocks.
-            if type == "assistant",
-               let message = obj["message"] as? [String: Any],
-               let content = message["content"] as? [[String: Any]] {
-                for block in content {
-                    if block["type"] as? String == "tool_use",
-                       let toolId = block["id"] as? String,
-                       let name = block["name"] as? String {
-                        let input: String
-                        if let inputDict = block["input"] as? [String: Any],
-                           let jsonData = try? JSONSerialization.data(withJSONObject: inputDict),
-                           let jsonStr = String(data: jsonData, encoding: .utf8) {
-                            input = jsonStr
-                        } else {
-                            input = "{}"
-                        }
-                        events.append(.toolUse(id: toolId, name: name, input: input))
+        // assistant partial messages — extract tool_use blocks.
+        // Text is streamed via content_block_delta above; only extract tools here.
+        if type == "assistant",
+           let message = obj["message"] as? [String: Any],
+           let content = message["content"] as? [[String: Any]] {
+            for block in content {
+                if block["type"] as? String == "tool_use",
+                   let toolId = block["id"] as? String,
+                   let name = block["name"] as? String {
+                    let input: String
+                    if let inputDict = block["input"] as? [String: Any],
+                       let jsonData = try? JSONSerialization.data(withJSONObject: inputDict),
+                       let jsonStr = String(data: jsonData, encoding: .utf8) {
+                        input = jsonStr
+                    } else {
+                        input = "{}"
                     }
+                    events.append(.toolUse(id: toolId, name: name, input: input))
                 }
             }
+        }
 
-            if type == "user",
-               let message = obj["message"] as? [String: Any],
-               let content = message["content"] as? [[String: Any]] {
-                for block in content {
-                    if block["type"] as? String == "tool_result",
-                       let toolUseId = block["tool_use_id"] as? String {
-                        let resultContent: String
-                        if let contentArr = block["content"] as? [[String: Any]] {
-                            resultContent = contentArr.compactMap { $0["text"] as? String }.joined(separator: "\n")
-                        } else if let text = block["content"] as? String {
-                            resultContent = text
-                        } else {
-                            resultContent = ""
-                        }
-                        events.append(.toolResult(toolUseId: toolUseId, content: resultContent))
+        // user messages — extract tool_result blocks
+        if type == "user",
+           let message = obj["message"] as? [String: Any],
+           let content = message["content"] as? [[String: Any]] {
+            for block in content {
+                if block["type"] as? String == "tool_result",
+                   let toolUseId = block["tool_use_id"] as? String {
+                    let resultContent: String
+                    if let contentArr = block["content"] as? [[String: Any]] {
+                        resultContent = contentArr.compactMap { $0["text"] as? String }.joined(separator: "\n")
+                    } else if let text = block["content"] as? String {
+                        resultContent = text
+                    } else {
+                        resultContent = ""
                     }
+                    events.append(.toolResult(toolUseId: toolUseId, content: resultContent))
                 }
             }
         }

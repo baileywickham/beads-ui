@@ -164,6 +164,31 @@ struct ChatView: View {
             isStreaming && toolCall.result == nil
         }
 
+        private var toolIcon: String {
+            switch toolCall.name {
+            case "Read": "doc.text"
+            case "Write": "doc.text.fill"
+            case "Edit": "pencil"
+            case "Bash": "terminal"
+            case "Glob": "folder.badge.gearshape"
+            case "Grep": "magnifyingglass"
+            case "WebFetch", "WebSearch": "globe"
+            default: "gearshape"
+            }
+        }
+
+        private var summary: String? {
+            guard let data = toolCall.input.data(using: .utf8),
+                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            else { return nil }
+
+            if let cmd = obj["command"] as? String { return cmd }
+            if let path = obj["file_path"] as? String { return (path as NSString).lastPathComponent }
+            if let pattern = obj["pattern"] as? String { return pattern }
+            if let query = obj["query"] as? String { return query }
+            return nil
+        }
+
         var body: some View {
             VStack(alignment: .leading, spacing: 0) {
                 Button {
@@ -172,7 +197,6 @@ struct ChatView: View {
                     }
                 } label: {
                     HStack(spacing: 6) {
-                        // Status indicator
                         if isRunning {
                             ProgressView()
                                 .controlSize(.mini)
@@ -182,9 +206,22 @@ struct ChatView: View {
                                 .foregroundStyle(.green)
                         }
 
+                        Image(systemName: toolIcon)
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            .frame(width: 14)
+
                         Text(toolCall.name)
                             .font(.system(.caption, design: .monospaced))
                             .fontWeight(.medium)
+
+                        if let summary {
+                            Text(summary)
+                                .font(.system(.caption2, design: .monospaced))
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
 
                         Spacer()
 
@@ -201,18 +238,21 @@ struct ChatView: View {
                 .buttonStyle(.plain)
 
                 if isExpanded {
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text(toolCall.input)
                             .font(.system(.caption2, design: .monospaced))
                             .foregroundStyle(.tertiary)
                             .lineLimit(8)
+                            .textSelection(.enabled)
 
                         if let result = toolCall.result {
                             Divider()
+                                .padding(.vertical, 2)
                             Text(result)
                                 .font(.system(.caption2, design: .monospaced))
                                 .foregroundStyle(.tertiary)
-                                .lineLimit(12)
+                                .lineLimit(16)
+                                .textSelection(.enabled)
                         }
                     }
                     .padding(.horizontal, 8)
