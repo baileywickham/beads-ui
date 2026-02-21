@@ -328,4 +328,122 @@ struct ChatStateTests {
         #expect(state.messages[1].toolCalls[0].result == "contents")
         #expect(state.messages[1].toolCalls[1].result == "file.txt")
     }
+
+    // MARK: - Issue context
+
+    private static func capturingProvider(
+        events: [ClaudeStreamEvent] = [.textDelta("ok"), .completed]
+    ) -> (@Sendable (String, String?, String) -> AsyncThrowingStream<ClaudeStreamEvent, Error>, @Sendable () -> String?) {
+        nonisolated(unsafe) var capturedPrompt: String?
+        let provider: @Sendable (String, String?, String) -> AsyncThrowingStream<ClaudeStreamEvent, Error> = { prompt, _, _ in
+            capturedPrompt = prompt
+            return AsyncThrowingStream { continuation in
+                for event in events {
+                    continuation.yield(event)
+                }
+                continuation.finish()
+            }
+        }
+        return (provider, { capturedPrompt })
+    }
+
+    @MainActor
+    @Test func issueContextPrependedToFirstMessage() async {
+        let state = ChatState(projectPath: "/tmp")
+        state.issueContext = "Issue PROJ-42: Fix login timeout\nDescription: Users get timeout errors"
+        let (provider, getPrompt) = Self.capturingProvider()
+        state.streamProvider = provider
+
+        state.sendMessage("what's wrong?")
+        while state.isStreaming { await Task.yield() }
+
+        let prompt = getPrompt()
+        #expect(prompt != nil)
+        #expect(prompt!.hasPrefix("Issue PROJ-42: Fix login timeout"))
+        #expect(prompt!.hasSuffix("what's wrong?"))
+        #expect(prompt!.contains("Users get timeout errors"))
+    }
+
+    @MainActor
+    @Test func issueContextNotPrependedOnFollowUp() async {
+        let state = ChatState(projectPath: "/tmp")
+        state.issueContext = "Issue PROJ-42: Fix login timeout"
+        state.streamProvider = Self.mockProvider(events: [
+            .sessionId("sess-1"),
+            .textDelta("first"),
+            .completed,
+        ])
+        state.sendMessage("hello")
+        while state.isStreaming { await Task.yield() }
+
+        #expect(state.sessionId == "sess-1")
+
+        let (provider, getPrompt) = Self.capturingProvider()
+        state.streamProvider = provider
+        state.sendMessage("follow up")
+        while state.isStreaming { await Task.yield() }
+
+        let prompt = getPrompt()
+        #expect(prompt == "follow up")
+    }
+
+    @MainActor
+    @Test func issueContextNotPrependedWhenNil() async {
+        let state = ChatState(projectPath: "/tmp")
+        #expect(state.issueContext == nil)
+
+        let (provider, getPrompt) = Self.capturingProvider()
+        state.streamProvider = provider
+        state.sendMessage("hello")
+        while state.isStreaming { await Task.yield() }
+
+        #expect(getPrompt() == "hello")
+    }
+
+    @MainActor
+    @Test func clearResetsSessionAndMessages() async {
+        let state = ChatState(projectPath: "/tmp")
+        state.issueContext = "Issue PROJ-1: Test"
+        state.streamProvider = Self.mockProvider(events: [
+            .sessionId("sess-1"),
+            .textDelta("reply"),
+            .completed,
+        ])
+        state.sendMessage("go")
+        while state.isStreaming { await Task.yield() }
+
+        #expect(state.sessionId == "sess-1")
+        #expect(state.messages.count == 2)
+
+        state.clear()
+
+        #expect(state.messages.isEmpty)
+        #expect(state.sessionId == nil)
+        #expect(!state.isStreaming)
+        #expect(state.errorMessage == nil)
+    }
+
+    @MainActor
+    @Test func clearThenSendPrependsContextAgain() async {
+        let state = ChatState(projectPath: "/tmp")
+        state.issueContext = "Issue PROJ-42: Fix it"
+        state.streamProvider = Self.mockProvider(events: [
+            .sessionId("sess-1"),
+            .textDelta("first"),
+            .completed,
+        ])
+        state.sendMessage("hello")
+        while state.isStreaming { await Task.yield() }
+
+        state.clear()
+
+        let (provider, getPrompt) = Self.capturingProvider()
+        state.streamProvider = provider
+        state.sendMessage("start over")
+        while state.isStreaming { await Task.yield() }
+
+        let prompt = getPrompt()
+        #expect(prompt!.hasPrefix("Issue PROJ-42: Fix it"))
+        #expect(prompt!.hasSuffix("start over"))
+    }
 }

@@ -224,8 +224,14 @@ struct ChatView: View {
                 } else {
                     VStack(alignment: .leading, spacing: 6) {
                         if !message.text.isEmpty {
-                            MarkdownView(content: message.text)
-                                .font(.callout)
+                            if chatState.isStreaming && message.id == chatState.messages.last?.id {
+                                Text(message.text)
+                                    .font(.callout)
+                                    .textSelection(.enabled)
+                            } else {
+                                MarkdownView(content: message.text)
+                                    .font(.callout)
+                            }
                         }
                         ForEach(message.toolCalls) { toolCall in
                             ToolCallView(toolCall: toolCall)
