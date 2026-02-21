@@ -11,6 +11,8 @@ final class ChatState {
 
     private var streamTask: Task<Void, Never>?
 
+    var streamProvider: @Sendable (String, String?, String) -> AsyncThrowingStream<ClaudeStreamEvent, Error> = ClaudeProcess.send
+
     init(projectPath: String) {
         self.projectPath = projectPath
     }
@@ -29,13 +31,14 @@ final class ChatState {
 
         let currentSessionId = sessionId
         let projectPath = self.projectPath
+        let provider = streamProvider
 
         streamTask = Task {
             do {
-                let stream = ClaudeProcess.send(
-                    prompt: trimmed,
-                    sessionId: currentSessionId,
-                    projectPath: projectPath
+                let stream = provider(
+                    trimmed,
+                    currentSessionId,
+                    projectPath
                 )
                 for try await event in stream {
                     switch event {

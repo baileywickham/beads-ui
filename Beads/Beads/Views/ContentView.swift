@@ -1,11 +1,15 @@
 import SwiftUI
 
-struct ContentView: View {
-    @Bindable var appState: AppState
+package struct ContentView: View {
+    @Bindable package var appState: AppState
+
+    package init(appState: AppState) {
+        self.appState = appState
+    }
     @State private var paletteState = CommandPaletteState()
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
-    var body: some View {
+    package var body: some View {
         ZStack {
             NavigationSplitView(columnVisibility: $columnVisibility) {
                 SidebarView(appState: appState)

@@ -7,6 +7,51 @@ enum ClaudeStreamEvent {
 }
 
 enum ClaudeProcess {
+    /// Parse a single NDJSON line into stream events.
+    /// Returns any events found and the first session ID encountered (if any).
+    static func parseStreamLine(_ jsonLine: String) -> (events: [ClaudeStreamEvent], sessionId: String?) {
+        guard let jsonData = jsonLine.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any]
+        else { return ([], nil) }
+
+        var events: [ClaudeStreamEvent] = []
+        var sessionId: String?
+
+        if let sid = obj["session_id"] as? String {
+            sessionId = sid
+        }
+
+        if let type = obj["type"] as? String {
+            if type == "content_block_delta",
+               let delta = obj["delta"] as? [String: Any],
+               let text = delta["text"] as? String {
+                events.append(.textDelta(text))
+            }
+
+            if type == "assistant",
+               let message = obj["message"] as? [String: Any],
+               let content = message["content"] as? [[String: Any]] {
+                for block in content {
+                    if let text = block["text"] as? String {
+                        events.append(.textDelta(text))
+                    }
+                }
+            }
+        }
+
+        return (events, sessionId)
+    }
+
+    /// Parse a JSON response (fallback format) into text and session ID.
+    static func parseJsonResponse(_ data: Data) -> (text: String, sessionId: String?)? {
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        let text = obj["result"] as? String ?? ""
+        let sid = obj["session_id"] as? String
+        return (text, sid)
+    }
+
     private static func findClaude() -> String? {
         let candidates = [
             ("~/.local/bin/claude" as NSString).expandingTildeInPath,
@@ -69,47 +114,18 @@ enum ClaudeProcess {
                     guard let line = String(data: data, encoding: .utf8) else { continue }
 
                     for jsonLine in line.components(separatedBy: "\n") where !jsonLine.isEmpty {
-                        guard let jsonData = jsonLine.data(using: .utf8),
-                              let obj = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any]
-                        else { continue }
+                        let parsed = parseStreamLine(jsonLine)
+                        if parsed.events.isEmpty && parsed.sessionId == nil { continue }
 
                         gotStreamOutput = true
 
-                        // Capture session_id from init or result events
-                        if let sid = obj["session_id"] as? String, capturedSessionId == nil {
+                        if let sid = parsed.sessionId, capturedSessionId == nil {
                             capturedSessionId = sid
                             continuation.yield(.sessionId(sid))
                         }
 
-                        // Handle content_block_delta with text delta
-                        if let type = obj["type"] as? String {
-                            if type == "content_block_delta",
-                               let delta = obj["delta"] as? [String: Any],
-                               let text = delta["text"] as? String {
-                                continuation.yield(.textDelta(text))
-                            }
-
-                            // Also handle assistant message content directly
-                            if type == "assistant",
-                               let message = obj["message"] as? [String: Any],
-                               let content = message["content"] as? [[String: Any]] {
-                                for block in content {
-                                    if let text = block["text"] as? String {
-                                        continuation.yield(.textDelta(text))
-                                    }
-                                }
-                            }
-
-                            // Handle result type (final message)
-                            if type == "result" {
-                                if let sid = obj["session_id"] as? String, capturedSessionId == nil {
-                                    capturedSessionId = sid
-                                    continuation.yield(.sessionId(sid))
-                                }
-                                if let result = obj["result"] as? String, !result.isEmpty {
-                                    // Result contains the full text; only use if we haven't streamed
-                                }
-                            }
+                        for event in parsed.events {
+                            continuation.yield(event)
                         }
                     }
                 }
@@ -171,13 +187,7 @@ enum ClaudeProcess {
         }
 
         let data = stdout.fileHandleForReading.readDataToEndOfFile()
-        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return nil
-        }
-
-        let text = obj["result"] as? String ?? ""
-        let sid = obj["session_id"] as? String
-        return (text, sid)
+        return parseJsonResponse(data)
     }
 
     enum ClaudeError: LocalizedError {

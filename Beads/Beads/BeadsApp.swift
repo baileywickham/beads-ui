@@ -1,5 +1,6 @@
 import SwiftUI
 import Sparkle
+import BeadsLib
 
 final class UpdaterDelegate: NSObject, SPUUpdaterDelegate {
     func allowedChannels(for updater: SPUUpdater) -> Set<String> {

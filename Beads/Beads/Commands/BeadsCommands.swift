@@ -1,7 +1,9 @@
 import SwiftUI
 
-struct BeadsCommands: Commands {
-    var body: some Commands {
+package struct BeadsCommands: Commands {
+    package init() {}
+
+    package var body: some Commands {
         CommandGroup(after: .newItem) {
             Button("New Issue") {
                 NotificationCenter.default.post(name: .createIssue, object: nil)
