@@ -1,5 +1,10 @@
 import SwiftUI
 
+private enum DetailTab: Hashable {
+    case comments
+    case chat
+}
+
 struct IssueDetailView: View {
     let issue: Issue
     @Bindable var state: ProjectState
@@ -8,6 +13,7 @@ struct IssueDetailView: View {
     @State private var titleText = ""
     @State private var showClaudeComment = false
     @State private var claudeComment = ""
+    @State private var selectedTab: DetailTab = .comments
 
     var body: some View {
         ScrollView {
@@ -85,13 +91,26 @@ struct IssueDetailView: View {
                     }
                 }
 
-                // Comments
-                IssueCommentsView(
-                    comments: issue.comments,
-                    onAdd: { text in
-                        state.addComment(issue.id, text: text)
-                    }
-                )
+                // Tab bar: Comments | Chat
+                HStack(spacing: 0) {
+                    tabButton("Comments", tab: .comments)
+                    tabButton("Chat", tab: .chat)
+                    Spacer()
+                }
+
+                // Tab content
+                switch selectedTab {
+                case .comments:
+                    IssueCommentsView(
+                        comments: issue.comments,
+                        onAdd: { text in
+                            state.addComment(issue.id, text: text)
+                        }
+                    )
+                case .chat:
+                    ChatView(chatState: state.chatState(for: issue.id))
+                        .frame(minHeight: 300)
+                }
             }
             .padding(20)
         }
@@ -197,5 +216,24 @@ struct IssueDetailView: View {
                     }
             }
         }
+    }
+
+    @ViewBuilder
+    private func tabButton(_ title: String, tab: DetailTab) -> some View {
+        Button {
+            selectedTab = tab
+        } label: {
+            VStack(spacing: 4) {
+                Text(title)
+                    .font(.subheadline)
+                    .fontWeight(selectedTab == tab ? .semibold : .regular)
+                    .foregroundStyle(selectedTab == tab ? .primary : .secondary)
+                Rectangle()
+                    .fill(selectedTab == tab ? Color.accentColor : .clear)
+                    .frame(height: 2)
+            }
+        }
+        .buttonStyle(.plain)
+        .frame(width: 80)
     }
 }

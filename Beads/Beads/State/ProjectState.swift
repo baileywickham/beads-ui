@@ -18,6 +18,14 @@ final class ProjectState {
     private var dbReader: DatabaseReader?
     private var watcher: DatabaseWatcher?
     private var lastLaunchTime: ContinuousClock.Instant = .now - .seconds(10)
+    private var chatStates: [String: ChatState] = [:]
+
+    func chatState(for issueId: String) -> ChatState {
+        if let existing = chatStates[issueId] { return existing }
+        let state = ChatState(projectPath: project.path)
+        chatStates[issueId] = state
+        return state
+    }
 
     init(project: Project, cliExecutor: CLIExecutor) {
         self.project = project
