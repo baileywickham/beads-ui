@@ -84,6 +84,43 @@ enum ClaudeProcess {
         return (events, sessionId)
     }
 
+    /// Parse chunked NDJSON data (as delivered by pipe reads) into stream events.
+    /// Handles partial lines that span multiple chunks by buffering incomplete lines.
+    /// Returns all parsed events and the final buffer state (for the next chunk).
+    static func parseStreamChunks(_ chunks: [String]) -> (events: [ClaudeStreamEvent], sessionId: String?) {
+        var buffer = ""
+        var allEvents: [ClaudeStreamEvent] = []
+        var sessionId: String?
+
+        for chunk in chunks {
+            buffer += chunk
+
+            while let newlineIndex = buffer.firstIndex(of: "\n") {
+                let jsonLine = String(buffer[buffer.startIndex..<newlineIndex])
+                buffer = String(buffer[buffer.index(after: newlineIndex)...])
+
+                guard !jsonLine.isEmpty else { continue }
+
+                let parsed = parseStreamLine(jsonLine)
+                if let sid = parsed.sessionId, sessionId == nil {
+                    sessionId = sid
+                }
+                allEvents.append(contentsOf: parsed.events)
+            }
+        }
+
+        // Process any remaining data in buffer (final line without trailing newline)
+        if !buffer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let parsed = parseStreamLine(buffer)
+            if let sid = parsed.sessionId, sessionId == nil {
+                sessionId = sid
+            }
+            allEvents.append(contentsOf: parsed.events)
+        }
+
+        return (allEvents, sessionId)
+    }
+
     /// Parse a JSON response (fallback format) into text and session ID.
     static func parseJsonResponse(_ data: Data) -> (text: String, sessionId: String?)? {
         guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -130,9 +167,9 @@ enum ClaudeProcess {
                 process.environment = env
 
                 let stdout = Pipe()
-                let stderr = Pipe()
                 process.standardOutput = stdout
-                process.standardError = stderr
+                // Drain stderr to prevent pipe buffer deadlock when --verbose fills the buffer
+                process.standardError = FileHandle(forWritingAtPath: "/dev/null")
 
                 continuation.onTermination = { _ in
                     if process.isRunning { process.terminate() }
@@ -148,14 +185,22 @@ enum ClaudeProcess {
                 let handle = stdout.fileHandleForReading
                 var capturedSessionId: String?
                 var gotStreamOutput = false
+                var buffer = ""
 
                 while true {
                     let data = handle.availableData
                     if data.isEmpty { break }
 
-                    guard let line = String(data: data, encoding: .utf8) else { continue }
+                    guard let chunk = String(data: data, encoding: .utf8) else { continue }
+                    buffer += chunk
 
-                    for jsonLine in line.components(separatedBy: "\n") where !jsonLine.isEmpty {
+                    // Process only complete lines (terminated by newline)
+                    while let newlineIndex = buffer.firstIndex(of: "\n") {
+                        let jsonLine = String(buffer[buffer.startIndex..<newlineIndex])
+                        buffer = String(buffer[buffer.index(after: newlineIndex)...])
+
+                        guard !jsonLine.isEmpty else { continue }
+
                         let parsed = parseStreamLine(jsonLine)
                         if parsed.events.isEmpty && parsed.sessionId == nil { continue }
 
@@ -166,6 +211,21 @@ enum ClaudeProcess {
                             continuation.yield(.sessionId(sid))
                         }
 
+                        for event in parsed.events {
+                            continuation.yield(event)
+                        }
+                    }
+                }
+
+                // Process any remaining data in buffer (final line without trailing newline)
+                if !buffer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    let parsed = parseStreamLine(buffer)
+                    if !parsed.events.isEmpty || parsed.sessionId != nil {
+                        gotStreamOutput = true
+                        if let sid = parsed.sessionId, capturedSessionId == nil {
+                            capturedSessionId = sid
+                            continuation.yield(.sessionId(sid))
+                        }
                         for event in parsed.events {
                             continuation.yield(event)
                         }
@@ -219,7 +279,7 @@ enum ClaudeProcess {
 
         let stdout = Pipe()
         process.standardOutput = stdout
-        process.standardError = Pipe()
+        process.standardError = FileHandle(forWritingAtPath: "/dev/null")
 
         do {
             try process.run()

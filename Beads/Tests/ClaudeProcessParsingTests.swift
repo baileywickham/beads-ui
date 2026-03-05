@@ -656,4 +656,162 @@ struct ClaudeProcessParsingTests {
         let result = ClaudeProcess.parseStreamLine(json)
         #expect(result.events.isEmpty)
     }
+
+    // MARK: - Real CLI output (captured from claude v2.1.69 --output-format stream-json --verbose --include-partial-messages)
+
+    @Test func realCLIOutputWithHooksAndExtraFields() {
+        // Real output includes hook_started, hook_response (huge), init with tools/mcp_servers,
+        // uuid/parent_tool_use_id on every line, context_management on assistant messages.
+        // Parser must handle these extra fields without breaking.
+        let lines = [
+            #"{"type":"system","subtype":"hook_started","hook_id":"e5c6","hook_name":"SessionStart:startup","hook_event":"SessionStart","uuid":"1f51","session_id":"sess-real"}"#,
+            #"{"type":"system","subtype":"hook_response","hook_id":"e5c6","hook_name":"SessionStart:startup","output":"long hook output...","stdout":"long hook output...","stderr":"","exit_code":0,"outcome":"success","uuid":"7101","session_id":"sess-real"}"#,
+            #"{"type":"system","subtype":"init","cwd":"/tmp","session_id":"sess-real","tools":["Bash","Read"],"mcp_servers":[{"name":"usebits-prod","status":"connected"}],"model":"claude-opus-4-6","permissionMode":"default","uuid":"f842"}"#,
+            #"{"type":"stream_event","event":{"type":"message_start","message":{"model":"claude-opus-4-6","id":"msg_01","type":"message","role":"assistant","content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":3,"cache_creation_input_tokens":8116,"cache_read_input_tokens":0}}},"session_id":"sess-real","parent_tool_use_id":null,"uuid":"0faf"}"#,
+            #"{"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}},"session_id":"sess-real","parent_tool_use_id":null,"uuid":"8b7d"}"#,
+            #"{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"4"}},"session_id":"sess-real","parent_tool_use_id":null,"uuid":"0633"}"#,
+            #"{"type":"assistant","message":{"model":"claude-opus-4-6","id":"msg_01","type":"message","role":"assistant","content":[{"type":"text","text":"4"}],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":3},"context_management":null},"parent_tool_use_id":null,"session_id":"sess-real","uuid":"01a7"}"#,
+            #"{"type":"stream_event","event":{"type":"content_block_stop","index":0},"session_id":"sess-real","parent_tool_use_id":null,"uuid":"c908"}"#,
+            #"{"type":"stream_event","event":{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":3,"output_tokens":5},"context_management":{"applied_edits":[]}},"session_id":"sess-real","parent_tool_use_id":null,"uuid":"1776"}"#,
+            #"{"type":"stream_event","event":{"type":"message_stop"},"session_id":"sess-real","parent_tool_use_id":null,"uuid":"0601"}"#,
+            #"{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","resetsAt":1772740800},"uuid":"58ab","session_id":"sess-real"}"#,
+            #"{"type":"result","subtype":"success","is_error":false,"duration_ms":2142,"num_turns":1,"result":"4","stop_reason":"end_turn","session_id":"sess-real","total_cost_usd":0.05,"uuid":"7a7a"}"#,
+        ]
+
+        var text = ""
+        var sid: String?
+        for line in lines {
+            let parsed = ClaudeProcess.parseStreamLine(line)
+            if let s = parsed.sessionId, sid == nil { sid = s }
+            for event in parsed.events {
+                if case .textDelta(let t) = event { text += t }
+            }
+        }
+        #expect(text == "4")
+        #expect(sid == "sess-real")
+    }
+
+    // MARK: - parseStreamChunks (line buffering)
+
+    @Test func chunksAlignedToLinesBehavesIdentically() {
+        // When chunks are complete lines, output matches per-line parsing
+        let chunks = [
+            #"{"type":"system","subtype":"init","session_id":"sess-1"}"# + "\n",
+            #"{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hello"}},"session_id":"sess-1"}"# + "\n",
+            #"{"type":"result","subtype":"success","session_id":"sess-1"}"# + "\n",
+        ]
+
+        let result = ClaudeProcess.parseStreamChunks(chunks)
+        #expect(result.events == [.textDelta("hello")])
+        #expect(result.sessionId == "sess-1")
+    }
+
+    @Test func chunksSplitMidLineReassembles() {
+        // A JSON line is split across two chunks — buffering must reassemble it
+        let fullLine = #"{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hello"}},"session_id":"sess-1"}"#
+
+        let splitPoint = fullLine.index(fullLine.startIndex, offsetBy: 40)
+        let firstHalf = String(fullLine[..<splitPoint])
+        let secondHalf = String(fullLine[splitPoint...])
+
+        let chunks = [
+            firstHalf,           // no newline — partial line
+            secondHalf + "\n",   // rest of line + newline
+        ]
+
+        let result = ClaudeProcess.parseStreamChunks(chunks)
+        #expect(result.events == [.textDelta("hello")])
+        #expect(result.sessionId == "sess-1")
+    }
+
+    @Test func chunksMultipleLinesSplitAcrossBoundary() {
+        // Two complete lines arrive in a single chunk, then a third is split
+        let line1 = #"{"type":"system","subtype":"init","session_id":"sess-1"}"#
+        let line2 = #"{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ab"}},"session_id":"sess-1"}"#
+        let line3 = #"{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"cd"}},"session_id":"sess-1"}"#
+
+        let splitPoint = line3.index(line3.startIndex, offsetBy: 20)
+
+        let chunks = [
+            line1 + "\n" + line2 + "\n" + String(line3[..<splitPoint]),
+            String(line3[splitPoint...]) + "\n",
+        ]
+
+        let result = ClaudeProcess.parseStreamChunks(chunks)
+        #expect(result.events == [.textDelta("ab"), .textDelta("cd")])
+        #expect(result.sessionId == "sess-1")
+    }
+
+    @Test func chunksFinalLineWithoutTrailingNewline() {
+        // Last line has no trailing newline (common for pipe EOF)
+        let chunks = [
+            #"{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"final"}},"session_id":"sess-1"}"#,
+        ]
+
+        let result = ClaudeProcess.parseStreamChunks(chunks)
+        #expect(result.events == [.textDelta("final")])
+        #expect(result.sessionId == "sess-1")
+    }
+
+    @Test func chunksNonJsonLinesSkipped() {
+        // Non-JSON lines (like "TLS certificate verification disabled...") are silently skipped
+        let chunks = [
+            "TLS certificate verification disabled in production DB connection\n",
+            #"{"type":"system","subtype":"init","session_id":"sess-1"}"# + "\n",
+            "WARNING: something else\n",
+            #"{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"works"}},"session_id":"sess-1"}"# + "\n",
+        ]
+
+        let result = ClaudeProcess.parseStreamChunks(chunks)
+        #expect(result.events == [.textDelta("works")])
+        #expect(result.sessionId == "sess-1")
+    }
+
+    @Test func chunksNonJsonLineSplitAcrossChunks() {
+        // A non-JSON warning is split across chunks, followed by valid JSON
+        let chunks = [
+            "TLS certificate verific",
+            "ation disabled\n" + #"{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ok"}},"session_id":"sess-1"}"# + "\n",
+        ]
+
+        let result = ClaudeProcess.parseStreamChunks(chunks)
+        #expect(result.events == [.textDelta("ok")])
+        #expect(result.sessionId == "sess-1")
+    }
+
+    @Test func chunksLargeHookResponseSplitAcrossReads() {
+        // Simulates a large hook_response line (several KB) split across multiple reads,
+        // followed by the actual text delta. This matches real CLI behavior where --verbose
+        // produces ~14KB of output with hook responses containing full beads context.
+        let hookLine = ##"{"type":"system","subtype":"hook_response","hook_id":"abc","output":"# Beads Workflow Context\n"## + String(repeating: "x", count: 4000) + ##"","session_id":"sess-1"}"##
+
+        let textLine = #"{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"response"}},"session_id":"sess-1"}"#
+
+        // Split the hook line into 3 chunks (simulating multiple pipe reads)
+        let third = hookLine.count / 3
+        let idx1 = hookLine.index(hookLine.startIndex, offsetBy: third)
+        let idx2 = hookLine.index(hookLine.startIndex, offsetBy: third * 2)
+
+        let chunks = [
+            String(hookLine[..<idx1]),
+            String(hookLine[idx1..<idx2]),
+            String(hookLine[idx2...]) + "\n" + textLine + "\n",
+        ]
+
+        let result = ClaudeProcess.parseStreamChunks(chunks)
+        #expect(result.events == [.textDelta("response")])
+        #expect(result.sessionId == "sess-1")
+    }
+
+    @Test func chunksEmptyChunksIgnored() {
+        let chunks = [
+            "",
+            #"{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}},"session_id":"sess-1"}"# + "\n",
+            "",
+            "",
+        ]
+
+        let result = ClaudeProcess.parseStreamChunks(chunks)
+        #expect(result.events == [.textDelta("hi")])
+    }
 }
