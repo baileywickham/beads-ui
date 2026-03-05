@@ -43,6 +43,11 @@ if [ -d "Beads/Beads/Assets.xcassets" ]; then
     cp -r Beads/Beads/Assets.xcassets "${APP_BUNDLE}/Contents/Resources/" 2>/dev/null || true
 fi
 
+# Copy app icon
+if [ -f "Beads/Beads/AppIcon.icns" ]; then
+    cp "Beads/Beads/AppIcon.icns" "${APP_BUNDLE}/Contents/Resources/AppIcon.icns"
+fi
+
 # Embed Sparkle.framework
 SPARKLE_FRAMEWORK="Beads/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
 mkdir -p "${APP_BUNDLE}/Contents/Frameworks"
