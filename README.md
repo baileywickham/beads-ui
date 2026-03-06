@@ -4,6 +4,8 @@ A native macOS app for viewing and managing [Beads](https://github.com/baileywic
 
 **[Download latest release](https://github.com/baileywickham/beads-ui/releases/latest)**
 
+![Beads UI](screenshot.png)
+
 ## Features
 
 - Browse and filter issues by status, priority, and search
