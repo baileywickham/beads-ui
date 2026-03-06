@@ -461,5 +461,15 @@
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
         </item>
 
+        <item>
+            <title>Version 0.2.27-beta.7</title>
+            <sparkle:version>0.2.27.7</sparkle:version>
+            <sparkle:shortVersionString>0.2.27-beta.7</sparkle:shortVersionString>
+            <sparkle:channel>beta</sparkle:channel>
+            <pubDate>Fri, 06 Mar 2026 05:07:58 +0000</pubDate>
+            <enclosure url="https://github.com/baileywickham/beads-ui/releases/download/v0.2.27-beta.7/Beads-0.2.27-beta.7-macOS.zip" length="10741785" type="application/octet-stream" sparkle:edSignature="8/RrKKIAp4jzAC7yBs7owVIqGdswPPqWHIQeN+qxD+hs7FkU+61cbB1ZKRN4lONMkrZaxFae8CJr8am4z9upAA==" />
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+        </item>
+
     </channel>
 </rss>
