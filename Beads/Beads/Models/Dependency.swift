@@ -24,6 +24,20 @@ struct Dependency: FetchableRecord, Identifiable, Decodable, Hashable {
         case relatedTitle = "related_title"
     }
 
+    init(
+        issueId: String, dependsOnId: String, type: DependencyType,
+        createdAt: Date, createdBy: String, metadata: String? = nil,
+        relatedTitle: String? = nil
+    ) {
+        self.issueId = issueId
+        self.dependsOnId = dependsOnId
+        self.type = type
+        self.createdAt = createdAt
+        self.createdBy = createdBy
+        self.metadata = metadata
+        self.relatedTitle = relatedTitle
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         issueId = try container.decode(String.self, forKey: .issueId)

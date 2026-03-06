@@ -15,14 +15,15 @@ final class ProjectState {
     var isLoading: Bool = false
     var showCreateSheet: Bool = false
 
-    private var dbReader: DatabaseReader?
-    private var watcher: DatabaseWatcher?
+    private var dataSource: (any DataSource)?
+    private var fileWatcher: DatabaseWatcher?
+    private var pollWatcher: PollingWatcher?
     private var lastLaunchTime: ContinuousClock.Instant = .now - .seconds(10)
     private var chatStates: [String: ChatState] = [:]
 
     func chatState(for issue: Issue) -> ChatState {
         if let existing = chatStates[issue.id] { return existing }
-        let state = ChatState(projectPath: project.path)
+        let state = ChatState(projectPath: project.path ?? "")
         var context = "Issue \(issue.id): \(issue.title)"
         if !issue.description.isEmpty { context += "\nDescription: \(issue.description)" }
         if !issue.design.isEmpty { context += "\nDesign: \(issue.design)" }
@@ -36,10 +37,16 @@ final class ProjectState {
     init(project: Project, cliExecutor: CLIExecutor) {
         self.project = project
         self.cliExecutor = cliExecutor
-        do {
-            self.dbReader = try DatabaseReader(path: project.dbPath)
-        } catch {
-            self.errorMessage = "Failed to open database: \(error.localizedDescription)"
+
+        switch project.source {
+        case .sqlite(_, let dbPath):
+            do {
+                self.dataSource = try SQLiteDataSource(path: dbPath)
+            } catch {
+                self.errorMessage = "Failed to open database: \(error.localizedDescription)"
+            }
+        case .dolt(let connection):
+            self.dataSource = DoltDataSource(connection: connection)
         }
     }
 
@@ -69,17 +76,18 @@ final class ProjectState {
     // MARK: - Data Loading
 
     func loadIssues() {
-        guard let reader = dbReader else { return }
+        guard let ds = dataSource else { return }
         isLoading = true
-        defer { isLoading = false }
-        do {
-            issues = try reader.fetchIssues()
-            // Refresh selected issue detail
-            if let id = selectedIssueId {
-                selectedIssue = try reader.fetchIssue(id: id)
+        Task {
+            defer { isLoading = false }
+            do {
+                issues = try await ds.fetchIssues(status: nil, search: nil)
+                if let id = selectedIssueId {
+                    selectedIssue = try await ds.fetchIssue(id: id)
+                }
+            } catch {
+                errorMessage = "Failed to load issues: \(error.localizedDescription)"
             }
-        } catch {
-            errorMessage = "Failed to load issues: \(error.localizedDescription)"
         }
     }
 
@@ -89,25 +97,39 @@ final class ProjectState {
     }
 
     func loadIssueDetail(id: String) {
-        guard let reader = dbReader else { return }
-        do {
-            selectedIssue = try reader.fetchIssue(id: id)
-        } catch {
-            errorMessage = "Failed to load issue: \(error.localizedDescription)"
+        guard let ds = dataSource else { return }
+        Task {
+            do {
+                selectedIssue = try await ds.fetchIssue(id: id)
+            } catch {
+                errorMessage = "Failed to load issue: \(error.localizedDescription)"
+            }
         }
     }
 
     // MARK: - File Watching
 
     func startWatching() {
-        watcher = DatabaseWatcher(directory: project.beadsDir) { [weak self] in
-            self?.loadIssues()
+        switch project.source {
+        case .sqlite:
+            guard let beadsDir = project.beadsDir else { return }
+            fileWatcher = DatabaseWatcher(directory: beadsDir) { [weak self] in
+                self?.loadIssues()
+            }
+        case .dolt:
+            let poller = PollingWatcher(interval: 2.0) { [weak self] in
+                self?.loadIssues()
+            }
+            poller.start()
+            pollWatcher = poller
         }
     }
 
     func stopWatching() {
-        watcher?.stop()
-        watcher = nil
+        fileWatcher?.stop()
+        fileWatcher = nil
+        pollWatcher?.stop()
+        pollWatcher = nil
     }
 
     // MARK: - Navigation
@@ -137,7 +159,6 @@ final class ProjectState {
     }
 
     func closeAndAdvance(_ id: String) {
-        // Compute next issue before the optimistic update changes filteredIssues
         let list = filteredIssues
         let nextIssue: Issue? = {
             guard let idx = list.firstIndex(where: { $0.id == id }) else { return nil }
@@ -159,7 +180,6 @@ final class ProjectState {
         let oldIssues = issues
         let oldDetail = selectedIssue
 
-        // Optimistic
         if let idx = issues.firstIndex(where: { $0.id == id }) {
             issues[idx].status = status
         }
@@ -167,7 +187,7 @@ final class ProjectState {
 
         Task {
             do {
-                try await cliExecutor.updateStatus(id: id, status: status, dbPath: project.dbPath)
+                try await cliExecutor.updateStatus(id: id, status: status, source: project.source)
             } catch {
                 self.issues = oldIssues
                 self.selectedIssue = oldDetail
@@ -185,7 +205,7 @@ final class ProjectState {
 
         Task {
             do {
-                try await cliExecutor.updatePriority(id: id, priority: priority, dbPath: project.dbPath)
+                try await cliExecutor.updatePriority(id: id, priority: priority, source: project.source)
             } catch {
                 self.issues = oldIssues
                 self.errorMessage = error.localizedDescription
@@ -202,7 +222,7 @@ final class ProjectState {
 
         Task {
             do {
-                try await cliExecutor.updateTitle(id: id, title: title, dbPath: project.dbPath)
+                try await cliExecutor.updateTitle(id: id, title: title, source: project.source)
             } catch {
                 self.issues = oldIssues
                 self.errorMessage = error.localizedDescription
@@ -215,13 +235,13 @@ final class ProjectState {
             do {
                 switch field {
                 case "description":
-                    try await cliExecutor.updateDescription(id: id, description: value, dbPath: project.dbPath)
+                    try await cliExecutor.updateDescription(id: id, description: value, source: project.source)
                 case "design":
-                    try await cliExecutor.updateDesign(id: id, design: value, dbPath: project.dbPath)
+                    try await cliExecutor.updateDesign(id: id, design: value, source: project.source)
                 case "notes":
-                    try await cliExecutor.updateNotes(id: id, notes: value, dbPath: project.dbPath)
+                    try await cliExecutor.updateNotes(id: id, notes: value, source: project.source)
                 default:
-                    try await cliExecutor.updateIssue(id: id, field: field, value: value, dbPath: project.dbPath)
+                    try await cliExecutor.updateIssue(id: id, field: field, value: value, source: project.source)
                 }
             } catch {
                 self.errorMessage = error.localizedDescription
@@ -237,7 +257,7 @@ final class ProjectState {
             do {
                 _ = try await cliExecutor.createIssue(
                     title: title, type: type, priority: priority,
-                    description: description, labels: labels, dbPath: project.dbPath)
+                    description: description, labels: labels, source: project.source)
             } catch {
                 self.errorMessage = error.localizedDescription
             }
@@ -245,6 +265,10 @@ final class ProjectState {
     }
 
     func launchClaude(_ issueId: String, comment: String? = nil) {
+        guard let path = project.path else {
+            errorMessage = "Cannot launch Claude for remote projects"
+            return
+        }
         let now = ContinuousClock.Instant.now
         guard now - lastLaunchTime > .seconds(1) else { return }
         lastLaunchTime = now
@@ -253,7 +277,7 @@ final class ProjectState {
                 ?? issues.first(where: { $0.id == issueId }) else { return }
         Task {
             do {
-                try await GhosttyLauncher.launchClaude(issue: issue, projectPath: project.path, comment: comment)
+                try await GhosttyLauncher.launchClaude(issue: issue, projectPath: path, comment: comment)
             } catch {
                 self.errorMessage = "Failed to launch Claude: \(error.localizedDescription)"
             }
@@ -263,7 +287,7 @@ final class ProjectState {
     func addComment(_ issueId: String, text: String) {
         Task {
             do {
-                try await cliExecutor.addComment(issueId: issueId, text: text, dbPath: project.dbPath)
+                try await cliExecutor.addComment(issueId: issueId, text: text, source: project.source)
             } catch {
                 self.errorMessage = error.localizedDescription
             }

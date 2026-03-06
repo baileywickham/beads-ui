@@ -43,12 +43,27 @@ struct SidebarView: View {
 
             Spacer()
 
-            if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
-                Text("v\(version)")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .padding(.bottom, 8)
+            VStack(spacing: 4) {
+                Button {
+                    appState.showServerConnectionSheet = true
+                } label: {
+                    HStack {
+                        Image(systemName: "server.rack")
+                        Text("Connect to Server...")
+                            .font(.caption)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderless)
+                .padding(.horizontal, 12)
+
+                if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
+                    Text("v\(version)")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
             }
+            .padding(.bottom, 8)
         }
         .frame(minWidth: 180)
     }
@@ -73,8 +88,8 @@ struct SidebarView: View {
                     }
                 } label: {
                     HStack {
-                        Image(systemName: "circle.hexagongrid")
-                            .foregroundStyle(.blue)
+                        Image(systemName: appState.selectedProject?.isDolt == true ? "server.rack" : "circle.hexagongrid")
+                            .foregroundStyle(appState.selectedProject?.isDolt == true ? .orange : .blue)
                         Text(appState.selectedProject?.name ?? "Select Project")
                             .fontWeight(.semibold)
                         Spacer()
@@ -94,8 +109,8 @@ struct SidebarView: View {
         } else if let project = appState.projects.first {
             VStack(spacing: 0) {
                 HStack {
-                    Image(systemName: "circle.hexagongrid")
-                        .foregroundStyle(.blue)
+                    Image(systemName: project.isDolt ? "server.rack" : "circle.hexagongrid")
+                        .foregroundStyle(project.isDolt ? .orange : .blue)
                     Text(project.name)
                         .fontWeight(.semibold)
                     Spacer()

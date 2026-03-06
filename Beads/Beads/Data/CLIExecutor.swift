@@ -17,10 +17,27 @@ actor CLIExecutor {
         let exitCode: Int32
     }
 
-    private func run(arguments: [String], dbPath: String) async throws -> CLIResult {
+    private func run(arguments: [String], source: ProjectSource) async throws -> CLIResult {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: bdPath)
-        process.arguments = arguments + ["--db", dbPath]
+
+        switch source {
+        case .sqlite(_, let dbPath):
+            process.arguments = arguments + ["--db", dbPath]
+        case .dolt(let conn):
+            process.arguments = arguments + [
+                "--backend", "dolt",
+                "--server",
+                "--server-host", conn.host,
+                "--server-port", String(conn.port),
+                "--server-user", conn.user,
+            ]
+            if let password = conn.password {
+                var env = ProcessInfo.processInfo.environment
+                env["BEADS_DOLT_PASSWORD"] = password
+                process.environment = env
+            }
+        }
 
         let stdout = Pipe()
         let stderr = Pipe()
@@ -47,7 +64,7 @@ actor CLIExecutor {
 
     func createIssue(
         title: String, type: IssueType, priority: IssuePriority,
-        description: String?, labels: [String], dbPath: String
+        description: String?, labels: [String], source: ProjectSource
     ) async throws -> String {
         var args = ["create", title, "--type", type.rawValue, "--priority", "P\(priority.rawValue)"]
         if let desc = description, !desc.isEmpty {
@@ -56,72 +73,71 @@ actor CLIExecutor {
         for label in labels {
             args += ["--add-label", label]
         }
-        let result = try await run(arguments: args, dbPath: dbPath)
-        // bd create outputs the new issue ID
+        let result = try await run(arguments: args, source: source)
         return result.output.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    func updateIssue(id: String, field: String, value: String, dbPath: String) async throws {
-        _ = try await run(arguments: ["update", id, "--\(field)", value], dbPath: dbPath)
+    func updateIssue(id: String, field: String, value: String, source: ProjectSource) async throws {
+        _ = try await run(arguments: ["update", id, "--\(field)", value], source: source)
     }
 
-    func updateStatus(id: String, status: IssueStatus, dbPath: String) async throws {
+    func updateStatus(id: String, status: IssueStatus, source: ProjectSource) async throws {
         if status == .closed {
-            _ = try await run(arguments: ["close", id], dbPath: dbPath)
+            _ = try await run(arguments: ["close", id], source: source)
         } else {
-            _ = try await run(arguments: ["update", id, "--status", status.rawValue], dbPath: dbPath)
+            _ = try await run(arguments: ["update", id, "--status", status.rawValue], source: source)
         }
     }
 
-    func updatePriority(id: String, priority: IssuePriority, dbPath: String) async throws {
-        _ = try await run(arguments: ["update", id, "--priority", "P\(priority.rawValue)"], dbPath: dbPath)
+    func updatePriority(id: String, priority: IssuePriority, source: ProjectSource) async throws {
+        _ = try await run(arguments: ["update", id, "--priority", "P\(priority.rawValue)"], source: source)
     }
 
-    func updateType(id: String, type: IssueType, dbPath: String) async throws {
-        _ = try await run(arguments: ["update", id, "--type", type.rawValue], dbPath: dbPath)
+    func updateType(id: String, type: IssueType, source: ProjectSource) async throws {
+        _ = try await run(arguments: ["update", id, "--type", type.rawValue], source: source)
     }
 
-    func updateAssignee(id: String, assignee: String, dbPath: String) async throws {
-        _ = try await run(arguments: ["update", id, "--assignee", assignee], dbPath: dbPath)
+    func updateAssignee(id: String, assignee: String, source: ProjectSource) async throws {
+        _ = try await run(arguments: ["update", id, "--assignee", assignee], source: source)
     }
 
-    func updateTitle(id: String, title: String, dbPath: String) async throws {
-        _ = try await run(arguments: ["update", id, "--title", title], dbPath: dbPath)
+    func updateTitle(id: String, title: String, source: ProjectSource) async throws {
+        _ = try await run(arguments: ["update", id, "--title", title], source: source)
     }
 
-    func updateDescription(id: String, description: String, dbPath: String) async throws {
-        _ = try await run(arguments: ["update", id, "--description", description], dbPath: dbPath)
+    func updateDescription(id: String, description: String, source: ProjectSource) async throws {
+        _ = try await run(arguments: ["update", id, "--description", description], source: source)
     }
 
-    func updateDesign(id: String, design: String, dbPath: String) async throws {
-        _ = try await run(arguments: ["update", id, "--design", design], dbPath: dbPath)
+    func updateDesign(id: String, design: String, source: ProjectSource) async throws {
+        _ = try await run(arguments: ["update", id, "--design", design], source: source)
     }
 
-    func updateNotes(id: String, notes: String, dbPath: String) async throws {
-        _ = try await run(arguments: ["update", id, "--notes", notes], dbPath: dbPath)
+    func updateNotes(id: String, notes: String, source: ProjectSource) async throws {
+        _ = try await run(arguments: ["update", id, "--notes", notes], source: source)
     }
 
-    func closeIssue(id: String, reason: String?, dbPath: String) async throws {
+    func closeIssue(id: String, reason: String?, source: ProjectSource) async throws {
         var args = ["close", id]
         if let reason, !reason.isEmpty {
             args += ["--reason", reason]
         }
-        _ = try await run(arguments: args, dbPath: dbPath)
+        _ = try await run(arguments: args, source: source)
     }
 
-    func reopenIssue(id: String, dbPath: String) async throws {
-        _ = try await run(arguments: ["reopen", id], dbPath: dbPath)
+    func reopenIssue(id: String, source: ProjectSource) async throws {
+        _ = try await run(arguments: ["reopen", id], source: source)
     }
 
-    func addComment(issueId: String, text: String, dbPath: String) async throws {
-        _ = try await run(arguments: ["comments", "add", issueId, text], dbPath: dbPath)
+    func addComment(issueId: String, text: String, source: ProjectSource) async throws {
+        _ = try await run(arguments: ["comments", "add", issueId, text], source: source)
     }
 
-    func addLabel(issueId: String, label: String, dbPath: String) async throws {
-        _ = try await run(arguments: ["label", "add", issueId, label], dbPath: dbPath)
+    func addLabel(issueId: String, label: String, source: ProjectSource) async throws {
+        _ = try await run(arguments: ["label", "add", issueId, label], source: source)
     }
 
-    func removeLabel(issueId: String, label: String, dbPath: String) async throws {
-        _ = try await run(arguments: ["label", "remove", issueId, label], dbPath: dbPath)
+    func removeLabel(issueId: String, label: String, source: ProjectSource) async throws {
+        _ = try await run(arguments: ["label", "remove", issueId, label], source: source)
     }
 }

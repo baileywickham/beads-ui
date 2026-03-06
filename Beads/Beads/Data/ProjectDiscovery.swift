@@ -28,10 +28,37 @@ struct ProjectDiscovery {
 
                 projects.append(Project(
                     name: name,
-                    path: projectPath,
-                    dbPath: dbPath,
+                    source: .sqlite(path: projectPath, dbPath: dbPath),
                     prefix: prefix
                 ))
+            }
+        }
+
+        return projects.sorted { $0.name < $1.name }
+    }
+
+    static func discoverDoltProjects(connections: [DoltConnection]) async -> [Project] {
+        var projects: [Project] = []
+
+        for conn in connections {
+            let ds = DoltDataSource(connection: conn)
+            do {
+                let databases = try await ds.discoverDatabases()
+                for db in databases {
+                    var dbConn = conn
+                    dbConn.database = db
+                    let prefix = db
+                    let name = conn.name.map { "\($0)/\(db)" }
+                        ?? "\(db) (\(conn.host))"
+                    projects.append(Project(
+                        name: name,
+                        source: .dolt(connection: dbConn),
+                        prefix: prefix
+                    ))
+                }
+            } catch {
+                // Connection failed — skip this server
+                continue
             }
         }
 

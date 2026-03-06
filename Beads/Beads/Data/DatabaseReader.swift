@@ -1,7 +1,7 @@
 import Foundation
 import GRDB
 
-final class DatabaseReader {
+final class DatabaseReader: @unchecked Sendable {
     private let dbQueue: DatabaseQueue
 
     init(path: String) throws {

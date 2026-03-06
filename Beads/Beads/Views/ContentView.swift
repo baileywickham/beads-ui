@@ -105,7 +105,15 @@ package struct ContentView: View {
         }
         .onChange(of: appState.selectedProject) { _, newProject in
             if let project = newProject {
-                paletteState.configure(dbPath: project.dbPath)
+                paletteState.configure(source: project.source)
+            }
+        }
+        .sheet(isPresented: Binding(
+            get: { appState.showServerConnectionSheet },
+            set: { appState.showServerConnectionSheet = $0 }
+        )) {
+            ServerConnectionSheet { connection in
+                appState.addConnection(connection)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleCommandPalette)) { _ in

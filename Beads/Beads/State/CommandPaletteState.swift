@@ -1,28 +1,35 @@
 import Foundation
 
-@Observable
+@MainActor @Observable
 final class CommandPaletteState {
     var isVisible: Bool = false
     var query: String = ""
     var results: [Issue] = []
     var selectedIndex: Int = 0
 
-    private var dbReader: DatabaseReader?
+    private var dataSource: (any DataSource)?
 
-    func configure(dbPath: String) {
-        self.dbReader = try? DatabaseReader(path: dbPath)
+    func configure(source: ProjectSource) {
+        switch source {
+        case .sqlite(_, let dbPath):
+            self.dataSource = try? SQLiteDataSource(path: dbPath)
+        case .dolt(let connection):
+            self.dataSource = DoltDataSource(connection: connection)
+        }
     }
 
     func search() {
-        guard !query.isEmpty, let reader = dbReader else {
+        guard !query.isEmpty, let ds = dataSource else {
             results = []
             return
         }
-        do {
-            results = try reader.searchIssues(query: query)
-            selectedIndex = 0
-        } catch {
-            results = []
+        Task {
+            do {
+                results = try await ds.searchIssues(query: query)
+                selectedIndex = 0
+            } catch {
+                results = []
+            }
         }
     }
 

@@ -12,6 +12,7 @@ let package = Package(
         .package(url: "https://github.com/sparkle-project/Sparkle.git", from: "2.8.0"),
         .package(url: "https://github.com/gonzalezreal/swift-markdown-ui.git", from: "2.4.0"),
         .package(url: "https://github.com/swiftlang/swift-testing.git", from: "0.12.0"),
+        .package(url: "https://github.com/vapor/mysql-nio.git", from: "1.0.0"),
     ],
     targets: [
         .target(
@@ -19,6 +20,7 @@ let package = Package(
             dependencies: [
                 .product(name: "GRDB", package: "GRDB.swift"),
                 .product(name: "MarkdownUI", package: "swift-markdown-ui"),
+                .product(name: "MySQLNIO", package: "mysql-nio"),
             ],
             path: "Beads",
             exclude: ["Assets.xcassets", "Info.plist", "BeadsApp.swift"]

@@ -6,8 +6,8 @@ struct ProjectRow: View {
 
     var body: some View {
         HStack {
-            Image(systemName: "circle.hexagongrid")
-                .foregroundStyle(.blue)
+            Image(systemName: project.isDolt ? "server.rack" : "circle.hexagongrid")
+                .foregroundStyle(project.isDolt ? .orange : .blue)
             VStack(alignment: .leading, spacing: 1) {
                 Text(project.name)
                     .fontWeight(isSelected ? .semibold : .regular)
