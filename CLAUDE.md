@@ -18,15 +18,29 @@ swift run                # build and launch the app
 swift test               # run tests
 ```
 
-Release packaging: `./scripts/build.sh <version>` (creates .app, .dmg, .zip)
+Release packaging: `./scripts/build.sh <version>` (creates .app, .dmg, .zip, requires `CODESIGN_IDENTITY` env var). Appcast update: `./scripts/update-appcast.sh` (inserts item from build output into `appcast.xml`).
+
+**CI releases:** Pushing to `main` automatically triggers a beta build via GitHub Actions. Pushing a version tag (e.g. `v0.2.26`) triggers a full release workflow.
+
+## Package Structure
+
+The package splits into two targets sharing the same `Beads/Beads/` source directory:
+
+- **BeadsLib** (library) — all app code except `BeadsApp.swift`. Types shared across targets use `package` access level.
+- **Beads** (executable) — only `BeadsApp.swift`, imports `BeadsLib` and `Sparkle`.
+- **BeadsTests** — in `Tests/`, depends on `BeadsLib` and `swift-testing` package.
+
+This split exists because Xcode is not installed; `swift-testing` must be added as an explicit package dependency. Protocol requirements (e.g. `body`) on `package` types also need `package` access.
 
 ## Architecture
 
-**State management:** `@MainActor @Observable` classes (`AppState`, `ProjectState`) drive the UI. SwiftUI views observe these directly via the Observation framework.
+**State management:** `@MainActor @Observable` classes (`AppState`, `ProjectState`, `ChatState`, `CommandPaletteState`) drive the UI. SwiftUI views observe these directly via the Observation framework.
 
 **Read path:** `DatabaseReader` uses GRDB to query the SQLite database at `.beads/beads.db` directly. Models (`Issue`, `Comment`, `Dependency`) conform to `FetchableRecord`. `DatabaseWatcher` uses `DispatchSource` file system monitoring with 150ms debounce to auto-reload on external changes.
 
 **Write path:** All mutations go through `CLIExecutor`, a Swift `actor` that shells out to the `bd` CLI. Write operations in `ProjectState` use **optimistic updates** — they mutate in-memory state immediately, fire an async CLI call, and roll back on failure.
+
+**Chat:** `ChatState` manages streaming conversations with Claude Code CLI. `ClaudeProcess` parses NDJSON stream events from the CLI process. Each issue gets its own `ChatState` instance (lazily created by `ProjectState.chatState(for:)`).
 
 **View structure:** Three-panel `NavigationSplitView` (sidebar → issue list → detail). Menu commands and keyboard shortcuts use `NotificationCenter` to decouple from views.
 
@@ -34,10 +48,10 @@ Release packaging: `./scripts/build.sh <version>` (creates .app, .dmg, .zip)
 
 ```
 Beads/Beads/
-├── State/          # AppState, ProjectState (central state containers)
-├── Data/           # CLIExecutor (actor), DatabaseReader (GRDB), DatabaseWatcher, GhosttyLauncher
-├── Models/         # Issue, IssueStatus, IssuePriority, IssueType, Comment, Dependency, Project
-├── Views/          # SwiftUI views organized by panel (Sidebar/, IssueList/, Detail/, CommandPalette/)
+├── State/          # AppState, ProjectState, ChatState, CommandPaletteState
+├── Data/           # CLIExecutor (actor), DatabaseReader (GRDB), DatabaseWatcher, ClaudeProcess, GhosttyLauncher
+├── Models/         # Issue, IssueStatus, IssuePriority, IssueType, Comment, Dependency, Project, ChatMessage
+├── Views/          # SwiftUI views organized by panel (Sidebar/, IssueList/, Detail/, Create/, CommandPalette/)
 └── Commands/       # macOS menu bar commands and Notification.Name constants
 ```
 
@@ -45,6 +59,8 @@ Beads/Beads/
 
 - **GRDB.swift** — SQLite read access; models use `FetchableRecord`
 - **Sparkle** — macOS auto-update framework; configured in Info.plist
+- **swift-markdown-ui** (MarkdownUI) — renders markdown in issue detail views
+- **swift-testing** — test framework (required as explicit dep since no Xcode)
 
 ## Runtime Requirements
 
@@ -58,3 +74,4 @@ Beads/Beads/
 - CLI actor methods all take `dbPath` as a parameter and append `--db <path>`
 - Issue IDs are string-based (e.g., `PROJ-123`)
 - `ProjectDiscovery` auto-finds projects with `.beads/beads.db` in `~/workspace`
+- App icon: `Beads/Beads/AppIcon.icns` — build script copies it to `Contents/Resources/`
