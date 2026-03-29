@@ -1,7 +1,9 @@
 # Beads UI
 
 <p align="center">
-  <img src="gin-and-tonic2.png" width="128" alt="Beads UI icon">
+  <a href="https://github.com/baileywickham/beads-ui">
+    <img src="gin-and-tonic2.png" width="128" alt="Beads UI icon">
+  </a>
 </p>
 
 A native macOS app for viewing and managing [Beads](https://github.com/baileywickham/beads) issues. Built with SwiftUI.
