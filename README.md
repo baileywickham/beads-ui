@@ -1,10 +1,18 @@
 # Beads UI
 
+<p align="center">
+  <img src="gin-and-tonic2.png" width="128" alt="Beads UI icon">
+</p>
+
 A native macOS app for viewing and managing [Beads](https://github.com/baileywickham/beads) issues. Built with SwiftUI.
 
 **[Download latest release](https://github.com/baileywickham/beads-ui/releases/latest)**
 
-![Beads UI](screenshot.png)
+### Issue Tracker
+
+Three-panel layout with sidebar filters, issue list, and detail view with inline editing.
+
+![Beads UI - Issue List](screenshot.png)
 
 ## Features
 
