@@ -8,7 +8,14 @@
 
 A native macOS app for viewing and managing [Beads](https://github.com/baileywickham/beads) issues. Built with SwiftUI.
 
-**[Download latest release](https://github.com/baileywickham/beads-ui/releases/latest)**
+## Install
+
+```bash
+brew tap baileywickham/tap
+brew install --cask beads
+```
+
+Or **[download the latest release](https://github.com/baileywickham/beads-ui/releases/latest)** and drag to Applications. Updates arrive automatically via Sparkle.
 
 ### Issue Tracker
 

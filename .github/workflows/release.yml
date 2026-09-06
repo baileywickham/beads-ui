@@ -8,6 +8,8 @@ on:
 
 jobs:
   release:
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     runs-on: macos-26
     permissions:
       contents: write
@@ -79,3 +81,12 @@ jobs:
           files: |
             .build-app/Beads-${{ steps.version.outputs.version }}-macOS.dmg
             .build-app/Beads-${{ steps.version.outputs.version }}-macOS.zip
+
+  bump-cask:
+    needs: release
+    if: ${{ !contains(github.ref_name, '-') }}   # stable tags only, never -beta.N
+    uses: baileywickham/homebrew-tap/.github/workflows/bump-cask.yml@main
+    with:
+      cask: beads
+      asset: Beads-${{ needs.release.outputs.version }}-macOS.dmg
+    secrets: inherit
